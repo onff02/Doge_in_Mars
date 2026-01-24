@@ -1,0 +1,123 @@
+// Prisma Schema for Doge City in Mars
+// 화성 갈끄니까 - 데이터 기반 항로 최적화 게임
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 유저 정보
+model User {
+  id          Int             @id @default(autoincrement())
+  email       String          @unique
+  password    String
+  nickname    String
+  introViewed Boolean         @default(false)
+  sessions    FlightSession[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("users")
+}
+
+// 로켓 스펙 (PER, PBR, ROE 매핑)
+model Rocket {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique
+  description String?
+  boostStat   Float           // PER 기반 - 가속 폭발력 (낮을수록 강력)
+  armorStat   Float           // PBR 기반 - 선체 내구도 (낮을수록 단단함)
+  fuelEcoStat Float           // ROE 기반 - 연비 효율 (높을수록 알뜰함)
+  imageUrl    String?
+  sessions    FlightSession[]
+  createdAt   DateTime        @default(now())
+
+  @@map("rockets")
+}
+
+// 세션 상태 Enum
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+// 투자 성향 Enum
+enum InvestingStyle {
+  AGGRESSIVE_GROWTH     // 공격적 성장주 투자자
+  BALANCED_INVESTOR     // 균형 잡힌 투자자
+  CAUTIOUS_VALUE        // 신중한 가치 투자자
+  RISK_TAKER            // 위험 감수형 투자자
+  DEFENSIVE             // 방어적 투자자
+}
+
+// 항해 세션 (실시간 데이터 동기화용)
+model FlightSession {
+  id                       Int           @id @default(autoincrement())
+  userId                   Int
+  user                     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rocketId                 Int
+  rocket                   Rocket        @relation(fields: [rocketId], references: [id])
+  
+  // 현재 상태
+  currentFuel              Float         @default(100.0)  // 현재 연료
+  currentHull              Float         @default(100.0)  // 현재 선체 내구도
+  distance                 Float         @default(0.0)    // 이동 거리 (화성까지의 진행도)
+  
+  // 선택한 항로 (주식 심볼)
+  symbol                   String        @default("AAPL")
+  
+  // 투자 성향 분석용 누적 데이터
+  totalFuelUsed            Float         @default(0.0)    // 총 사용 연료량
+  highStabilityThrustCount Int           @default(0)      // 안정 구간 고출력 횟수
+  lowStabilityThrustCount  Int           @default(0)      // 불안정 구간 고출력 횟수 (위험 감수 성향)
+  
+  // 세션 상태
+  status                   SessionStatus @default(IN_PROGRESS)
+  
+  // 엔딩 결과
+  tier                     String?       // S, A, B, C, D, F
+  investingStyle           InvestingStyle?
+  advice                   String?
+  
+  logs                     FlightLog[]
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  @@map("flight_sessions")
+}
+
+// 투자 성향 분석용 로그
+model FlightLog {
+  id        Int           @id @default(autoincrement())
+  sessionId Int
+  session   FlightSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  yValue    Float         // 중력파 안정도 (주가)
+  fuelInput Float         // 유저의 슬라이더 입력값 (0~100)
+  
+  // 해당 시점의 상태 스냅샷
+  fuelAfter Float?        // 이 액션 후 남은 연료
+  hullAfter Float?        // 이 액션 후 남은 선체 내구도
+  distanceAfter Float?    // 이 액션 후 총 이동 거리
+  
+  timestamp DateTime      @default(now())
+
+  @@map("flight_logs")
+}
+
+// 차트 데이터 캐시 (외부 API 데이터 캐싱용)
+model ChartDataCache {
+  id        Int      @id @default(autoincrement())
+  symbol    String
+  data      Json     // 주가 데이터 배열
+  fetchedAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([symbol])
+  @@map("chart_data_cache")
+}
