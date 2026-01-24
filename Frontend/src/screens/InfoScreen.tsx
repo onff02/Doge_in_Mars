@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { theme } from "../theme";
 
 interface InfoScreenProps {
   rocketId: number;
@@ -125,9 +126,9 @@ export default function InfoScreen({ rocketId, onBack }: InfoScreenProps) {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
-  frame: { backgroundColor: "#05070f", borderRadius: 16, overflow: "hidden" },
-  bg: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0b0f1c" },
+  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.black },
+  frame: { backgroundColor: theme.colors.frame, borderRadius: theme.radius.xl, overflow: "hidden" },
+  bg: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.bg },
   grid: { ...StyleSheet.absoluteFillObject, opacity: 0.12 },
   gridLineH: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: "rgba(251,191,36,0.3)" },
   gridLineV: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: "rgba(251,191,36,0.3)" },
@@ -135,37 +136,37 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   backButton: { paddingVertical: 4, paddingHorizontal: 6 },
   backPressed: { transform: [{ scale: 0.97 }] },
-  backText: { color: "#fbbf24", fontWeight: "800", fontSize: 11 },
+  backText: { color: theme.colors.accent, fontWeight: "800", fontSize: 11 },
   headerCenter: { alignItems: "center" },
   headerSpacer: { width: 90 },
-  title: { color: "#f59e0b", fontWeight: "900", fontSize: 16, letterSpacing: 0.6 },
+  title: { color: theme.colors.accentDeep, fontWeight: "900", fontSize: 16, letterSpacing: 0.6 },
   subtitle: { color: "rgba(251,191,36,0.6)", fontSize: 10, marginTop: 2 },
   tabs: { flexDirection: "row", gap: 10, marginBottom: 12 },
   tab: {
     flex: 1,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.2)",
+    borderColor: theme.colors.panelBorderSoft,
     backgroundColor: "rgba(17,24,39,0.5)",
   },
-  tabActive: { backgroundColor: "rgba(234,88,12,0.55)", borderColor: "rgba(251,191,36,0.6)" },
+  tabActive: { backgroundColor: "rgba(234,88,12,0.55)", borderColor: theme.colors.accentBorder },
   tabPressed: { transform: [{ scale: 0.98 }] },
   tabText: { color: "rgba(251,191,36,0.6)", fontWeight: "800", textAlign: "center", fontSize: 11 },
-  tabTextActive: { color: "#fff" },
+  tabTextActive: { color: theme.colors.textPrimary },
   gridWrap: { flexDirection: "row", flexWrap: "wrap" },
   card: {
-    backgroundColor: "rgba(17,24,39,0.78)",
-    borderRadius: 12,
+    backgroundColor: theme.colors.panel,
+    borderRadius: theme.radius.md,
     padding: 10,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.25)",
+    borderColor: theme.colors.panelBorder,
   },
   cardLabel: { color: "rgba(251,191,36,0.65)", fontSize: 10, marginBottom: 6 },
   cardValue: { fontWeight: "900", fontSize: 14, marginBottom: 6 },
   cardStatus: { flexDirection: "row", alignItems: "center", gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 99 },
-  statusText: { color: "rgba(255,255,255,0.7)", fontSize: 9, letterSpacing: 0.6 },
+  statusText: { color: theme.colors.textMuted, fontSize: 9, letterSpacing: 0.6 },
   notice: {
     marginTop: 12,
     flexDirection: "row",
@@ -173,11 +174,11 @@ const s = StyleSheet.create({
     gap: 6,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.track,
     borderWidth: 1,
     borderColor: "rgba(34,197,94,0.35)",
     alignSelf: "flex-start",
   },
-  noticeText: { color: "#22c55e", fontSize: 10, fontWeight: "800", letterSpacing: 0.6 },
+  noticeText: { color: theme.colors.success, fontSize: 10, fontWeight: "800", letterSpacing: 0.6 },
 });

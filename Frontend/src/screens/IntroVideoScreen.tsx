@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation";
+import { theme } from "../theme";
 
 export default function IntroVideoScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -16,8 +17,14 @@ export default function IntroVideoScreen() {
   );
 }
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#050814" },
-  text: { color: "rgba(255,255,255,0.8)" },
-  btn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.10)" },
-  btnText: { color: "white", fontWeight: "800" },
+  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.frame },
+  text: { color: theme.colors.textMuted },
+  btn: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceSoft,
+  },
+  btnText: { color: theme.colors.textPrimary, fontWeight: "800" },
 });
