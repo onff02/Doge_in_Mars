@@ -4,13 +4,22 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation";
 import { theme } from "../theme";
+import { markIntroComplete } from "../api/client";
 
 export default function IntroVideoScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const handleSkip = async () => {
+    try {
+      await markIntroComplete();
+    } catch {
+      // Intro completion is optional for local playback.
+    }
+    nav.navigate("RocketSelect");
+  };
   return (
     <View style={s.root}>
       <Text style={s.text}>[Intro Video Placeholder]</Text>
-      <Pressable style={s.btn} onPress={() => nav.navigate("RocketSelect")}>
+      <Pressable style={s.btn} onPress={handleSkip}>
         <Text style={s.btnText}>SKIP</Text>
       </Pressable>
     </View>

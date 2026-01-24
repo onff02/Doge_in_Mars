@@ -2,20 +2,12 @@ import React, { useState } from "react";
 import { ImageBackground, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { RootStackParamList } from "../navigation";
 import { theme } from "../theme";
+import { loginUser, saveAuthSession } from "../api/client";
 
 const BG_IMAGE =
   "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
-const USER_KEY = "auth_user";
-const SESSION_KEY = "auth_session";
-
-type StoredUser = {
-  email: string;
-  password: string;
-};
-
 export default function LoginScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [email, setEmail] = useState("");
@@ -29,20 +21,17 @@ export default function LoginScreen() {
       return;
     }
     try {
-      const stored = await AsyncStorage.getItem(USER_KEY);
-      if (!stored) {
-        setError("No account found. Please sign up first.");
-        return;
+      const trimmedEmail = email.trim();
+      const response = await loginUser({ email: trimmedEmail, password });
+      await saveAuthSession({ token: response.token, user: response.user });
+      if (response.introViewed) {
+        nav.navigate("RocketSelect");
+      } else {
+        nav.navigate("Intro");
       }
-      const user: StoredUser = JSON.parse(stored);
-      if (user.email !== email.trim() || user.password !== password) {
-        setError("Invalid email or password.");
-        return;
-      }
-      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify({ email: user.email, loggedInAt: Date.now() }));
-      nav.navigate("Intro");
     } catch (e) {
-      setError("Login failed. Please try again.");
+      const message = e instanceof Error ? e.message : "Login failed. Please try again.";
+      setError(message);
     }
   };
 

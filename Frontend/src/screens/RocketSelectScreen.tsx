@@ -5,8 +5,9 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation";
 import { SpaceshipVariant } from "../components/SpaceshipVariant";
 import { theme } from "../theme";
+import { getRockets, type Rocket } from "../api/client";
 
-const rockets = [
+const fallbackRockets = [
   { id: 1, name: "PIONEER", description: "Speed & Agility", stats: { speed: 9, armor: 5, power: 7 } },
   { id: 2, name: "TITAN", description: "Heavy & Durable", stats: { speed: 5, armor: 10, power: 8 } },
   { id: 3, name: "STRIKER", description: "Balanced Fighter", stats: { speed: 7, armor: 7, power: 9 } },
@@ -23,6 +24,14 @@ type Star = {
   size: number;
   duration: number;
   delay: number;
+};
+
+type RocketCard = {
+  id: number;
+  name: string;
+  description: string;
+  stats: { speed: number; armor: number; power: number };
+  raw?: Rocket;
 };
 
 function createStars(count: number): Star[] {
@@ -53,6 +62,9 @@ function StatBar({ value, delay }: { value: number; delay: number }) {
 export default function RocketSelectScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [selectedRocket, setSelectedRocket] = useState<number | null>(null);
+  const [rocketCards, setRocketCards] = useState<RocketCard[]>(fallbackRockets);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const { width, height } = useWindowDimensions();
   const stars = useMemo(() => createStars(STAR_COUNT), []);
 
@@ -91,6 +103,68 @@ export default function RocketSelectScreen() {
       pulseAnim.stop();
     };
   }, [confirmPulse, float, stars, twinkles]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const toBoostScore = (per?: number) => {
+      if (!per || per <= 0) return 1;
+      return Math.min(10, Math.max(1, Math.round(30 / per)));
+    };
+
+    const toArmorScore = (pbr?: number) => {
+      if (!pbr || pbr <= 0) return 1;
+      return Math.min(10, Math.max(1, Math.round(10 / pbr)));
+    };
+
+    const toFuelScore = (roe?: number) => {
+      if (!roe || roe <= 0) return 1;
+      return Math.min(10, Math.max(1, Math.round(roe / 2)));
+    };
+
+    const loadRockets = async () => {
+      try {
+        const response = await getRockets();
+        const cards = response.rockets.map((rocket) => {
+          const boostValue = rocket.gameStats?.boost?.value ?? rocket.rawStats?.PER ?? 0;
+          const armorValue = rocket.gameStats?.armor?.value ?? rocket.rawStats?.PBR ?? 0;
+          const fuelValue = rocket.gameStats?.fuelEco?.value ?? rocket.rawStats?.ROE ?? 0;
+          return {
+            id: rocket.id,
+            name: rocket.name,
+            description: rocket.description || "Unknown specs",
+            stats: {
+              speed: toBoostScore(boostValue),
+              armor: toArmorScore(armorValue),
+              power: toFuelScore(fuelValue),
+            },
+            raw: rocket,
+          };
+        });
+
+        if (isMounted) {
+          setRocketCards(cards.length ? cards : fallbackRockets);
+          setError("");
+        }
+      } catch (e) {
+        if (isMounted) {
+          const message = e instanceof Error ? e.message : "Failed to load rockets.";
+          setError(message);
+          setRocketCards(fallbackRockets);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadRockets();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const frame = useMemo(() => {
     const targetRatio = 932 / 430;
@@ -154,8 +228,11 @@ export default function RocketSelectScreen() {
               <View style={s.headerSpacer} />
             </View>
 
+            {isLoading ? <Text style={s.loadingText}>Loading rockets...</Text> : null}
+            {error ? <Text style={s.errorText}>{error}</Text> : null}
+
             <View style={[s.cards, !isWide && s.cardsStack]}>
-              {rockets.map((rocket, index) => {
+              {rocketCards.map((rocket, index) => {
                 const selected = selectedRocket === rocket.id;
                 return (
                   <Pressable
@@ -242,95 +319,76 @@ const s = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
   starLayer: { ...StyleSheet.absoluteFillObject },
   star: { position: "absolute", backgroundColor: theme.colors.star, borderRadius: 99 },
-  content: { flex: 1, paddingHorizontal: 24, paddingVertical: 18 },
+  content: { flex: 1, padding: 18 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
-  backButton: { paddingVertical: 6, paddingHorizontal: 8 },
-  backPressed: { transform: [{ scale: 0.96 }] },
-  backText: { color: theme.colors.accent, fontWeight: "800", fontSize: 12 },
-  headerTitle: { color: theme.colors.accentDeep, fontWeight: "900", fontSize: 18, letterSpacing: 0.6 },
-  headerSpacer: { width: 70 },
-  cards: { flex: 1, flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center" },
-  cardsStack: { justifyContent: "flex-start" },
+  backButton: { paddingVertical: 4, paddingHorizontal: 6 },
+  backPressed: { transform: [{ scale: 0.97 }] },
+  backText: { color: theme.colors.accent, fontWeight: "800", fontSize: 11 },
+  headerTitle: { color: theme.colors.accent, fontWeight: "900", fontSize: 14, letterSpacing: 1 },
+  headerSpacer: { width: 60 },
+  loadingText: { color: theme.colors.textMuted, textAlign: "center", marginBottom: 4 },
+  errorText: { color: theme.colors.danger, textAlign: "center", marginBottom: 6 },
+  cards: { flexDirection: "row", gap: 14, justifyContent: "space-between", flex: 1 },
+  cardsStack: { flexDirection: "column" },
   card: {
-    width: 180,
-    marginHorizontal: 10,
-    marginVertical: 8,
-    padding: 12,
+    flex: 1,
+    backgroundColor: theme.colors.panel,
     borderRadius: theme.radius.lg,
-    backgroundColor: "rgba(17, 6, 3, 0.65)",
-    borderWidth: 2,
-    borderColor: "rgba(124, 45, 18, 0.6)",
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.panelBorder,
   },
-  cardStack: { width: 200 },
-  cardPressed: { transform: [{ scale: 0.98 }] },
-  cardSelected: {
-    borderColor: theme.colors.accentBorderStrong,
-    shadowColor: theme.colors.accent,
-    shadowOpacity: 0.6,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-  },
+  cardStack: { marginBottom: 10 },
+  cardPressed: { transform: [{ scale: 0.99 }] },
+  cardSelected: { borderColor: theme.colors.accentBorderStrong, backgroundColor: "rgba(234,88,12,0.2)" },
   checkBadge: {
     position: "absolute",
-    top: -8,
-    right: -8,
+    right: 12,
+    top: 12,
     backgroundColor: theme.colors.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: theme.radius.pill,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    zIndex: 2,
   },
-  checkText: { color: "#000", fontWeight: "900", fontSize: 10 },
-  shipWrap: { alignItems: "center", marginBottom: 8 },
-  cardInfo: { alignItems: "center", marginBottom: 8 },
-  cardTitle: { color: theme.colors.accent, fontWeight: "900", fontSize: 14, letterSpacing: 0.4 },
-  cardDesc: { color: "rgba(251,191,36,0.65)", fontSize: 10 },
-  stats: {},
-  statRow: { marginBottom: 6 },
+  checkText: { fontWeight: "800", fontSize: 10, color: theme.colors.frame },
+  shipWrap: { alignItems: "center", marginBottom: 10 },
+  cardInfo: { alignItems: "center", marginBottom: 10 },
+  cardTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 14, marginBottom: 4 },
+  cardDesc: { color: theme.colors.textMuted, fontSize: 11, textAlign: "center" },
+  stats: { gap: 8 },
+  statRow: { gap: 6 },
   statHeader: { flexDirection: "row", justifyContent: "space-between" },
-  statLabel: { color: theme.colors.textAccent, fontSize: 9, fontWeight: "700" },
-  statValue: { color: theme.colors.textAccentStrong, fontSize: 9, fontWeight: "800" },
-  statTrack: { height: 6, borderRadius: 999, overflow: "hidden", backgroundColor: "rgba(69, 10, 10, 0.6)" },
-  statFill: { height: 6, borderRadius: 999, backgroundColor: theme.colors.accentDeep },
+  statLabel: { color: theme.colors.textAccent, fontSize: 10 },
+  statValue: { color: theme.colors.textPrimary, fontSize: 10, fontWeight: "800" },
+  statTrack: { height: 6, borderRadius: 99, backgroundColor: theme.colors.track, overflow: "hidden" },
+  statFill: { height: 6, borderRadius: 99, backgroundColor: theme.colors.accent },
   confirmWrap: { alignItems: "center", marginTop: 8 },
   confirmButton: {
+    width: "70%",
     paddingVertical: 10,
-    paddingHorizontal: 24,
     borderRadius: theme.radius.pill,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: theme.colors.accentBorderStrong,
-    backgroundColor: "rgba(234,88,12,0.6)",
-    overflow: "hidden",
+    backgroundColor: "rgba(251,191,36,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   confirmDisabled: { opacity: 0.5 },
   confirmPressed: { transform: [{ scale: 0.97 }] },
-  confirmText: { color: theme.colors.textPrimary, fontWeight: "900", letterSpacing: 0.8, fontSize: 13, textAlign: "center" },
+  confirmText: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 11, letterSpacing: 0.9 },
   confirmGlow: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: theme.radius.pill,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: theme.colors.accentBorder,
-    shadowColor: theme.colors.accent,
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 0 },
   },
   confirmPulse: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: theme.radius.pill,
     borderWidth: 2,
-    borderColor: theme.colors.accentBorder,
+    borderColor: theme.colors.accentGlow,
   },
-  grid: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 80,
-    opacity: 0.12,
-    transform: [{ perspective: 400 }, { rotateX: "60deg" }],
-  },
-  gridLineH: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: "rgba(251,191,36,0.3)" },
-  gridLineV: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: "rgba(251,191,36,0.3)" },
+  grid: { ...StyleSheet.absoluteFillObject, opacity: 0.08 },
+  gridLineH: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: theme.colors.accent },
+  gridLineV: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: theme.colors.accent },
 });

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
@@ -7,11 +7,20 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen from "./InfoScreen";
 import { theme } from "../theme";
+import { getAuthToken, getChart, getFlightStatus, startFlight, syncFlight } from "../api/client";
 
 type StatusItem = {
   label: string;
   value: string;
   color: string;
+};
+
+type Telemetry = {
+  fuel?: number;
+  hull?: number;
+  progress?: number;
+  isStable?: boolean;
+  status?: string;
 };
 
 function generateGsiData(points: number) {
@@ -30,8 +39,17 @@ export default function CockpitScreen() {
   const { width, height } = useWindowDimensions();
   const [view, setView] = useState<"cockpit" | "chart" | "info">("cockpit");
   const [leverPosition, setLeverPosition] = useState<"up" | "down">("down");
+  const [telemetry, setTelemetry] = useState<Telemetry>({});
+  const [chartValues, setChartValues] = useState<number[]>([]);
+  const [stabilityValues, setStabilityValues] = useState<number[]>([]);
+  const [symbol, setSymbol] = useState("AAPL");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const chartCursor = useRef(1);
 
-  const gsiData = useMemo(() => generateGsiData(40), []);
+  const fallbackData = useMemo(() => generateGsiData(40), []);
+  const gsiData = chartValues.length ? chartValues : fallbackData;
 
   const frame = useMemo(() => {
     const targetRatio = 932 / 430;
@@ -56,25 +74,148 @@ export default function CockpitScreen() {
   const knobBottom = leverPosition === "down" ? bottomInset : trackHeight - topInset - knobHeight;
   const swipeThreshold = 18;
 
+  const updateLeverPosition = useCallback((next: "up" | "down") => {
+    setLeverPosition(next);
+    setHasInteracted(true);
+  }, []);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > Math.abs(gesture.dx),
       onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy <= -swipeThreshold) setLeverPosition("up");
-        else if (gesture.dy >= swipeThreshold) setLeverPosition("down");
+        if (gesture.dy <= -swipeThreshold) updateLeverPosition("up");
+        else if (gesture.dy >= swipeThreshold) updateLeverPosition("down");
       },
       onPanResponderTerminate: (_, gesture) => {
-        if (gesture.dy <= -swipeThreshold) setLeverPosition("up");
-        else if (gesture.dy >= swipeThreshold) setLeverPosition("down");
+        if (gesture.dy <= -swipeThreshold) updateLeverPosition("up");
+        else if (gesture.dy >= swipeThreshold) updateLeverPosition("down");
       },
     })
   ).current;
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      setIsLoading(true);
+      setError("");
+
+      const token = await getAuthToken();
+      if (!token) {
+        if (isMounted) {
+          setError("Login required to start a flight.");
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const status = await getFlightStatus();
+        let activeSymbol = symbol;
+
+        if (status.activeSession) {
+          activeSymbol = status.activeSession.symbol || symbol;
+          if (isMounted) {
+            setSymbol(activeSymbol);
+            setTelemetry({
+              fuel: status.activeSession.currentFuel,
+              hull: status.activeSession.currentHull,
+              progress: status.activeSession.progress,
+            });
+          }
+        } else {
+          const start = await startFlight({ rocketId, symbol });
+          activeSymbol = start.session.symbol || symbol;
+          if (isMounted) {
+            const progress = (start.session.distance / start.session.targetDistance) * 100;
+            setSymbol(activeSymbol);
+            setTelemetry({
+              fuel: start.session.currentFuel,
+              hull: start.session.currentHull,
+              progress,
+            });
+          }
+        }
+
+        const chart = await getChart(activeSymbol, 120);
+        if (isMounted) {
+          setChartValues(chart.gravityData.values);
+          setStabilityValues(chart.gravityData.stability);
+          chartCursor.current = 1;
+          const latestChange = chart.gravityData.stability[chart.gravityData.stability.length - 1] ?? 0;
+          setTelemetry((prev) => ({ ...prev, isStable: latestChange >= 0 }));
+        }
+      } catch (e) {
+        if (isMounted) {
+          const message = e instanceof Error ? e.message : "Failed to load cockpit data.";
+          setError(message);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [rocketId, symbol]);
+
+  useEffect(() => {
+    if (!hasInteracted || chartValues.length < 2) return;
+
+    let isMounted = true;
+
+    const sync = async () => {
+      try {
+        const fuelInput = leverPosition === "up" ? 80 : 20;
+        const index = Math.min(chartCursor.current, chartValues.length - 1);
+        const yValue = chartValues[index];
+        const previousYValue = chartValues[index - 1] ?? yValue;
+        const response = await syncFlight({ fuelInput, yValue, previousYValue });
+        if (isMounted) {
+          setTelemetry({
+            fuel: response.currentFuel,
+            hull: response.currentHull,
+            progress: response.progress,
+            isStable: response.isStableZone,
+            status: response.status,
+          });
+          chartCursor.current = Math.min(index + 1, chartValues.length - 1);
+        }
+      } catch (e) {
+        if (isMounted) {
+          const message = e instanceof Error ? e.message : "Sync failed.";
+          setError(message);
+        }
+      }
+    };
+
+    sync();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [chartValues, hasInteracted, leverPosition]);
+
+  const latestChange = stabilityValues[stabilityValues.length - 1] ?? 0;
+  const stableSignal = telemetry.isStable ?? latestChange >= 0;
+  const signalText = isLoading ? "Loading signal" : stableSignal ? "Stable signal" : "Turbulent signal";
+  const signalColor = stableSignal ? theme.colors.success : theme.colors.warning;
+
+  const fuelValue = telemetry.fuel !== undefined ? `${Math.round(telemetry.fuel)}%` : "Optimal";
+  const hullValue = telemetry.hull !== undefined ? `${Math.round(telemetry.hull)}%` : "Nominal";
+  const fuelColor = telemetry.fuel !== undefined && telemetry.fuel < 30 ? theme.colors.warning : theme.colors.success;
+  const hullColor = telemetry.hull !== undefined && telemetry.hull < 30 ? theme.colors.danger : theme.colors.accent;
+
   const statusItems: StatusItem[] = [
-    { label: "Engine", value: "Optimal", color: theme.colors.success },
-    { label: "Hull", value: "Nominal", color: theme.colors.accent },
-    { label: "Life Support", value: "Active", color: theme.colors.success },
+    { label: "Engine", value: stableSignal ? "Stable" : "Turbulent", color: signalColor },
+    { label: "Hull", value: hullValue, color: hullColor },
+    { label: "Fuel", value: fuelValue, color: fuelColor },
   ];
 
   if (view === "chart") {
@@ -99,9 +240,10 @@ export default function CockpitScreen() {
               <TrajectoryGSIChart data={gsiData} width={chartWidth} height={chartHeight} />
             </View>
             <View style={s.statusRow}>
-              <View style={[s.statusDot, { backgroundColor: theme.colors.success }]} />
-              <Text style={s.statusText}>Stable signal</Text>
+              <View style={[s.statusDot, { backgroundColor: signalColor }]} />
+              <Text style={s.statusText}>{signalText}</Text>
             </View>
+            {error ? <Text style={s.errorText}>{error}</Text> : null}
             <Pressable style={({ pressed }) => [s.actionButton, pressed && s.actionPressed]} onPress={() => setView("chart")}>
               <Text style={s.actionText}>VIEW CHART</Text>
             </Pressable>
@@ -170,6 +312,7 @@ const s = StyleSheet.create({
   statusRow: { flexDirection: "row", alignItems: "center", marginTop: 10, marginBottom: 12, gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
   statusText: { color: theme.colors.textMuted, fontSize: 11 },
+  errorText: { color: theme.colors.danger, fontSize: 10, marginBottom: 6 },
   actionButton: {
     marginTop: "auto",
     paddingVertical: 8,

@@ -2,23 +2,16 @@ import React, { useState } from "react";
 import { ImageBackground, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { RootStackParamList } from "../navigation";
 import { theme } from "../theme";
+import { registerUser, saveAuthSession } from "../api/client";
 
 const BG_IMAGE =
   "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
-const USER_KEY = "auth_user";
-const SESSION_KEY = "auth_session";
-
-type StoredUser = {
-  email: string;
-  password: string;
-};
-
 export default function SignupScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [email, setEmail] = useState("");
+  const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -26,12 +19,16 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     setError("");
     const trimmedEmail = email.trim();
-    if (!trimmedEmail || !password || !confirm) {
+    if (!trimmedEmail || !nickname.trim() || !password || !confirm) {
       setError("Please fill in all fields.");
       return;
     }
     if (!trimmedEmail.includes("@")) {
       setError("Please enter a valid email.");
+      return;
+    }
+    if (nickname.trim().length < 2) {
+      setError("Nickname must be at least 2 characters.");
       return;
     }
     if (password.length < 6) {
@@ -43,19 +40,12 @@ export default function SignupScreen() {
       return;
     }
     try {
-      const stored = await AsyncStorage.getItem(USER_KEY);
-      if (stored) {
-        const user: StoredUser = JSON.parse(stored);
-        if (user.email === trimmedEmail) {
-          setError("Account already exists. Please log in.");
-          return;
-        }
-      }
-      await AsyncStorage.setItem(USER_KEY, JSON.stringify({ email: trimmedEmail, password }));
-      await AsyncStorage.setItem(SESSION_KEY, JSON.stringify({ email: trimmedEmail, loggedInAt: Date.now() }));
+      const response = await registerUser({ email: trimmedEmail, password, nickname: nickname.trim() });
+      await saveAuthSession({ token: response.token, user: response.user });
       nav.navigate("Intro");
     } catch (e) {
-      setError("Sign up failed. Please try again.");
+      const message = e instanceof Error ? e.message : "Sign up failed. Please try again.";
+      setError(message);
     }
   };
 
@@ -76,6 +66,15 @@ export default function SignupScreen() {
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
+            />
+            <TextInput
+              style={s.input}
+              placeholder="Nickname"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={nickname}
+              onChangeText={setNickname}
             />
             <TextInput
               style={s.input}
