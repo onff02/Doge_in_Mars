@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
+import { theme } from "../theme";
 
 interface ChartScreenProps {
   onBack: () => void;
@@ -70,9 +71,9 @@ export default function ChartScreen({ onBack, data }: ChartScreenProps) {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
-  frame: { backgroundColor: "#05070f", borderRadius: 16, overflow: "hidden" },
-  bg: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0b0f1c" },
+  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.black },
+  frame: { backgroundColor: theme.colors.frame, borderRadius: theme.radius.xl, overflow: "hidden" },
+  bg: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.bg },
   grid: { ...StyleSheet.absoluteFillObject, opacity: 0.12 },
   gridLineH: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: "rgba(251,191,36,0.3)" },
   gridLineV: { position: "absolute", top: 0, bottom: 0, width: 1, backgroundColor: "rgba(251,191,36,0.3)" },
@@ -80,18 +81,18 @@ const s = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   backButton: { paddingVertical: 4, paddingHorizontal: 6 },
   backPressed: { transform: [{ scale: 0.97 }] },
-  backText: { color: "#fbbf24", fontWeight: "800", fontSize: 11 },
+  backText: { color: theme.colors.accent, fontWeight: "800", fontSize: 11 },
   headerCenter: { alignItems: "center" },
   headerSpacer: { width: 90 },
-  title: { color: "#f59e0b", fontWeight: "900", fontSize: 16, letterSpacing: 0.6 },
+  title: { color: theme.colors.accentDeep, fontWeight: "900", fontSize: 16, letterSpacing: 0.6 },
   subtitle: { color: "rgba(251,191,36,0.6)", fontSize: 10, marginTop: 2 },
   chartCard: {
     flex: 1,
-    borderRadius: 14,
+    borderRadius: theme.radius.lg,
     padding: 12,
-    backgroundColor: "rgba(17,24,39,0.78)",
+    backgroundColor: theme.colors.panel,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.25)",
+    borderColor: theme.colors.panelBorder,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -102,12 +103,12 @@ const s = StyleSheet.create({
     gap: 6,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.track,
     borderWidth: 1,
     borderColor: "rgba(34,197,94,0.4)",
   },
   statusDot: { width: 6, height: 6, borderRadius: 99 },
-  footerText: { color: "#22c55e", fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
-  footerMeta: { color: "rgba(251,191,36,0.7)", fontSize: 10 },
+  footerText: { color: theme.colors.success, fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
+  footerMeta: { color: theme.colors.textAccent, fontSize: 10 },
 });

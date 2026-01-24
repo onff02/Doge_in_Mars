@@ -6,6 +6,7 @@ import type { RootStackParamList } from "../navigation";
 import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen from "./InfoScreen";
+import { theme } from "../theme";
 
 type StatusItem = {
   label: string;
@@ -71,9 +72,9 @@ export default function CockpitScreen() {
   ).current;
 
   const statusItems: StatusItem[] = [
-    { label: "Engine", value: "Optimal", color: "#22c55e" },
-    { label: "Hull", value: "Nominal", color: "#fbbf24" },
-    { label: "Life Support", value: "Active", color: "#22c55e" },
+    { label: "Engine", value: "Optimal", color: theme.colors.success },
+    { label: "Hull", value: "Nominal", color: theme.colors.accent },
+    { label: "Life Support", value: "Active", color: theme.colors.success },
   ];
 
   if (view === "chart") {
@@ -98,7 +99,7 @@ export default function CockpitScreen() {
               <TrajectoryGSIChart data={gsiData} width={chartWidth} height={chartHeight} />
             </View>
             <View style={s.statusRow}>
-              <View style={[s.statusDot, { backgroundColor: "#22c55e" }]} />
+              <View style={[s.statusDot, { backgroundColor: theme.colors.success }]} />
               <Text style={s.statusText}>Stable signal</Text>
             </View>
             <Pressable style={({ pressed }) => [s.actionButton, pressed && s.actionPressed]} onPress={() => setView("chart")}>
@@ -141,58 +142,58 @@ export default function CockpitScreen() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
-  frame: { backgroundColor: "#05070f", borderRadius: 16, overflow: "hidden" },
-  bg: { ...StyleSheet.absoluteFillObject, backgroundColor: "#0b0f1c" },
-  topPanel: { position: "absolute", top: 0, left: 0, right: 0, height: 40, backgroundColor: "rgba(17,24,39,0.6)" },
-  bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, height: 48, backgroundColor: "rgba(17,24,39,0.6)" },
+  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.black },
+  frame: { backgroundColor: theme.colors.frame, borderRadius: theme.radius.xl, overflow: "hidden" },
+  bg: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.bg },
+  topPanel: { position: "absolute", top: 0, left: 0, right: 0, height: 40, backgroundColor: theme.colors.panelEdge },
+  bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, height: 48, backgroundColor: theme.colors.panelEdge },
   content: { flex: 1, flexDirection: "row", padding: 16, gap: 12 },
   panel: {
     flex: 1,
-    backgroundColor: "rgba(17,24,39,0.78)",
-    borderRadius: 14,
+    backgroundColor: theme.colors.panel,
+    borderRadius: theme.radius.lg,
     padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.25)",
+    borderColor: theme.colors.panelBorder,
   },
   centerPanel: {
     flex: 0.9,
-    backgroundColor: "rgba(17,24,39,0.78)",
-    borderRadius: 14,
+    backgroundColor: theme.colors.panel,
+    borderRadius: theme.radius.lg,
     padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.25)",
+    borderColor: theme.colors.panelBorder,
     alignItems: "center",
   },
-  panelTitle: { color: "#fbbf24", fontWeight: "800", fontSize: 12, letterSpacing: 0.8, marginBottom: 10 },
-  screen: { borderRadius: 12, padding: 8, backgroundColor: "rgba(0,0,0,0.35)" },
+  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 12, letterSpacing: 0.8, marginBottom: 10 },
+  screen: { borderRadius: theme.radius.md, padding: 8, backgroundColor: theme.colors.track },
   statusRow: { flexDirection: "row", alignItems: "center", marginTop: 10, marginBottom: 12, gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
-  statusText: { color: "rgba(255,255,255,0.7)", fontSize: 11 },
+  statusText: { color: theme.colors.textMuted, fontSize: 11 },
   actionButton: {
     marginTop: "auto",
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.5)",
+    borderColor: theme.colors.accentBorder,
     backgroundColor: "rgba(234,88,12,0.4)",
   },
   actionPressed: { transform: [{ scale: 0.98 }] },
-  actionText: { color: "white", fontWeight: "800", fontSize: 11, textAlign: "center", letterSpacing: 0.8 },
+  actionText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 11, textAlign: "center", letterSpacing: 0.8 },
   fuelWrap: { alignItems: "center", marginTop: 4, width: "100%" },
-  fuelLabel: { color: "rgba(251,191,36,0.7)", fontSize: 11, marginBottom: 8, letterSpacing: 0.6 },
+  fuelLabel: { color: theme.colors.textAccent, fontSize: 11, marginBottom: 8, letterSpacing: 0.6 },
   leverTrack: {
     width: 64,
     height: 170,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.4)",
-    backgroundColor: "rgba(0,0,0,0.35)",
+    borderColor: theme.colors.accentBorderSoft,
+    backgroundColor: theme.colors.track,
     alignItems: "center",
     justifyContent: "flex-end",
     paddingBottom: 18,
   },
-  leverStem: { position: "absolute", width: 6, top: 16, bottom: 16, borderRadius: 999, backgroundColor: "rgba(251,191,36,0.25)" },
+  leverStem: { position: "absolute", width: 6, top: 16, bottom: 16, borderRadius: 999, backgroundColor: theme.colors.panelBorder },
   leverKnob: {
     position: "absolute",
     width: 46,
@@ -200,21 +201,21 @@ const s = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "rgba(234,88,12,0.75)",
     borderWidth: 2,
-    borderColor: "rgba(251,191,36,0.9)",
+    borderColor: theme.colors.accentBorderStrong,
     alignItems: "center",
     justifyContent: "center",
   },
-  leverKnobInner: { width: 18, height: 6, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.6)" },
-  fuelHint: { marginTop: 10, color: "rgba(255,255,255,0.65)", fontSize: 10 },
+  leverKnobInner: { width: 18, height: 6, borderRadius: 999, backgroundColor: theme.colors.textSubtle },
+  fuelHint: { marginTop: 10, color: theme.colors.textHint, fontSize: 10 },
   statusList: { gap: 10 },
   statusCard: {
     paddingVertical: 8,
     paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.card,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.2)",
+    borderColor: theme.colors.panelBorderSoft,
   },
-  statusLabel: { color: "rgba(251,191,36,0.7)", fontSize: 10, marginBottom: 4, letterSpacing: 0.6 },
+  statusLabel: { color: theme.colors.textAccent, fontSize: 10, marginBottom: 4, letterSpacing: 0.6 },
   statusValue: { fontWeight: "800", fontSize: 12 },
 });

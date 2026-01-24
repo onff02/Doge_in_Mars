@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import type { RootStackParamList } from "../navigation";
 import { Spaceship } from "../components/Spaceship";
+import { theme } from "../theme";
 
 const STAR_COUNT = 20;
 const BG_IMAGE =
@@ -184,23 +185,23 @@ export default function StartScreen() {
   );
 }
 const s = StyleSheet.create({
-  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
-  frame: { backgroundColor: "#000", overflow: "hidden", borderRadius: 16 },
+  root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.black },
+  frame: { backgroundColor: theme.colors.black, overflow: "hidden", borderRadius: theme.radius.xl },
   bg: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
   starLayer: { ...StyleSheet.absoluteFillObject },
-  star: { position: "absolute", backgroundColor: "#ffffff", borderRadius: 99 },
+  star: { position: "absolute", backgroundColor: theme.colors.star, borderRadius: 99 },
   content: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 28 },
   contentStack: { flexDirection: "column", paddingHorizontal: 18 },
   left: { marginRight: 32 },
   leftStack: { marginRight: 0, marginBottom: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  title: { color: "#fbbf24", fontSize: 32, fontWeight: "900", textAlign: "center", letterSpacing: 0.5 },
+  title: { color: theme.colors.accent, fontSize: 32, fontWeight: "900", textAlign: "center", letterSpacing: 0.5 },
   button: {
     marginTop: 20,
     paddingVertical: 12,
     paddingHorizontal: 26,
-    borderRadius: 999,
+    borderRadius: theme.radius.pill,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
@@ -209,10 +210,10 @@ const s = StyleSheet.create({
   buttonPressed: { transform: [{ scale: 0.97 }] },
   buttonGlow: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
+    borderRadius: theme.radius.pill,
     borderWidth: 2,
-    borderColor: "rgba(251,191,36,0.8)",
-    shadowColor: "#fbbf24",
+    borderColor: theme.colors.accentBorderStrong,
+    shadowColor: theme.colors.accent,
     shadowOpacity: 0.7,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 0 },
@@ -220,24 +221,24 @@ const s = StyleSheet.create({
   },
   buttonPulse: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 999,
+    borderRadius: theme.radius.pill,
     borderWidth: 2,
-    borderColor: "rgba(251,191,36,0.7)",
+    borderColor: theme.colors.accentBorder,
   },
   buttonContent: { flexDirection: "row", alignItems: "center" },
-  buttonText: { color: "#ffffff", fontWeight: "900", fontSize: 18, letterSpacing: 1 },
+  buttonText: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 18, letterSpacing: 1 },
   authRow: { flexDirection: "row", gap: 12, marginTop: 12 },
   authButton: {
     paddingVertical: 8,
     paddingHorizontal: 18,
-    borderRadius: 999,
+    borderRadius: theme.radius.pill,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.6)",
+    borderColor: theme.colors.accentBorder,
     backgroundColor: "rgba(0,0,0,0.2)",
   },
-  authButtonFilled: { backgroundColor: "rgba(251,191,36,0.2)", borderColor: "rgba(251,191,36,0.9)" },
+  authButtonFilled: { backgroundColor: theme.colors.accentTint, borderColor: theme.colors.accentBorderStrong },
   authButtonPressed: { transform: [{ scale: 0.96 }] },
-  authButtonText: { color: "rgba(251,191,36,0.85)", fontWeight: "800", fontSize: 12, letterSpacing: 0.8 },
-  authButtonTextFilled: { color: "#fbbf24" },
-  hint: { marginTop: 10, color: "rgba(251,191,36,0.85)", fontSize: 12 },
+  authButtonText: { color: theme.colors.textAccentStrong, fontWeight: "800", fontSize: 12, letterSpacing: 0.8 },
+  authButtonTextFilled: { color: theme.colors.accent },
+  hint: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 12 },
 });
