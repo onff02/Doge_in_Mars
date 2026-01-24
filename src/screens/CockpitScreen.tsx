@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import React, { useMemo, useRef, useState } from "react";
+import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../navigation";
@@ -28,17 +28,9 @@ export default function CockpitScreen() {
   const rocketId = route.params?.rocketId ?? 1;
   const { width, height } = useWindowDimensions();
   const [view, setView] = useState<"cockpit" | "chart" | "info">("cockpit");
-  const [fuelLevel] = useState(72);
+  const [leverPosition, setLeverPosition] = useState<"up" | "down">("down");
 
   const gsiData = useMemo(() => generateGsiData(40), []);
-
-  if (view === "chart") {
-    return <ChartScreen data={gsiData} onBack={() => setView("cockpit")} />;
-  }
-
-  if (view === "info") {
-    return <InfoScreen rocketId={rocketId} onBack={() => setView("cockpit")} />;
-  }
 
   const frame = useMemo(() => {
     const targetRatio = 932 / 430;
@@ -56,12 +48,41 @@ export default function CockpitScreen() {
 
   const chartWidth = Math.max(200, Math.min(frame.width * 0.33, 260));
   const chartHeight = Math.max(120, Math.min(frame.height * 0.45, 180));
+  const trackHeight = 170;
+  const knobHeight = 30;
+  const topInset = 16;
+  const bottomInset = 18;
+  const knobBottom = leverPosition === "down" ? bottomInset : trackHeight - topInset - knobHeight;
+  const swipeThreshold = 18;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy <= -swipeThreshold) setLeverPosition("up");
+        else if (gesture.dy >= swipeThreshold) setLeverPosition("down");
+      },
+      onPanResponderTerminate: (_, gesture) => {
+        if (gesture.dy <= -swipeThreshold) setLeverPosition("up");
+        else if (gesture.dy >= swipeThreshold) setLeverPosition("down");
+      },
+    })
+  ).current;
 
   const statusItems: StatusItem[] = [
     { label: "Engine", value: "Optimal", color: "#22c55e" },
     { label: "Hull", value: "Nominal", color: "#fbbf24" },
     { label: "Life Support", value: "Active", color: "#22c55e" },
   ];
+
+  if (view === "chart") {
+    return <ChartScreen data={gsiData} onBack={() => setView("cockpit")} />;
+  }
+
+  if (view === "info") {
+    return <InfoScreen rocketId={rocketId} onBack={() => setView("cockpit")} />;
+  }
 
   return (
     <View style={s.root}>
@@ -86,18 +107,17 @@ export default function CockpitScreen() {
           </View>
 
           <View style={s.centerPanel}>
-            <Text style={s.panelTitle}>SYSTEMS</Text>
+            <Text style={s.panelTitle}>FUEL CONTROL</Text>
             <View style={s.fuelWrap}>
-              <Text style={s.fuelLabel}>FUEL</Text>
-              <View style={s.fuelTrack}>
-                <View style={[s.fuelFill, { height: `${fuelLevel}%` }]} />
+              <Text style={s.fuelLabel}>CHOOSE ACTION</Text>
+            </View>
+            <View style={s.leverTrack}>
+              <View style={s.leverStem} />
+              <View style={[s.leverKnob, { bottom: knobBottom }]} {...panResponder.panHandlers}>
+                <View style={s.leverKnobInner} />
               </View>
-              <Text style={s.fuelValue}>{fuelLevel.toFixed(0)}%</Text>
             </View>
-            <View style={s.systemRow}>
-              <View style={[s.statusDot, { backgroundColor: "#fbbf24" }]} />
-              <Text style={s.systemText}>Auto-pilot ready</Text>
-            </View>
+            <Text style={s.fuelHint}>Swipe up or down to choose</Text>
           </View>
 
           <View style={s.panel}>
@@ -159,22 +179,33 @@ const s = StyleSheet.create({
   },
   actionPressed: { transform: [{ scale: 0.98 }] },
   actionText: { color: "white", fontWeight: "800", fontSize: 11, textAlign: "center", letterSpacing: 0.8 },
-  fuelWrap: { alignItems: "center", marginTop: 4 },
-  fuelLabel: { color: "rgba(251,191,36,0.7)", fontSize: 11, marginBottom: 8 },
-  fuelTrack: {
-    width: 46,
-    height: 160,
-    borderRadius: 99,
-    backgroundColor: "rgba(0,0,0,0.35)",
+  fuelWrap: { alignItems: "center", marginTop: 4, width: "100%" },
+  fuelLabel: { color: "rgba(251,191,36,0.7)", fontSize: 11, marginBottom: 8, letterSpacing: 0.6 },
+  leverTrack: {
+    width: 64,
+    height: 170,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.3)",
-    overflow: "hidden",
+    borderColor: "rgba(251,191,36,0.4)",
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
     justifyContent: "flex-end",
+    paddingBottom: 18,
   },
-  fuelFill: { width: "100%", borderRadius: 99, backgroundColor: "#f59e0b" },
-  fuelValue: { color: "#fbbf24", fontWeight: "800", marginTop: 10 },
-  systemRow: { flexDirection: "row", alignItems: "center", marginTop: 18, gap: 6 },
-  systemText: { color: "rgba(255,255,255,0.75)", fontSize: 11 },
+  leverStem: { position: "absolute", width: 6, top: 16, bottom: 16, borderRadius: 999, backgroundColor: "rgba(251,191,36,0.25)" },
+  leverKnob: {
+    position: "absolute",
+    width: 46,
+    height: 30,
+    borderRadius: 12,
+    backgroundColor: "rgba(234,88,12,0.75)",
+    borderWidth: 2,
+    borderColor: "rgba(251,191,36,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  leverKnobInner: { width: 18, height: 6, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.6)" },
+  fuelHint: { marginTop: 10, color: "rgba(255,255,255,0.65)", fontSize: 10 },
   statusList: { gap: 10 },
   statusCard: {
     paddingVertical: 8,
