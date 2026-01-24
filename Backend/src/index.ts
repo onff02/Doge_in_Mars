@@ -176,9 +176,8 @@ async function start() {
        GET  /api/rockets          - 로켓 목록
        GET  /api/rockets/:id      - 로켓 상세
        
-       GET  /api/charts           - 항로 목록
-       GET  /api/charts/:symbol   - 중력파 데이터
-       GET  /api/charts/:symbol/live - 실시간 데이터
+       GET  /api/charts           - 고정 항로 중력파 데이터 (DOGE)
+       GET  /api/charts/live      - 실시간 중력파 데이터
     `);
 
   } catch (err) {
