@@ -8,7 +8,72 @@ export async function authRoutes(fastify: FastifyInstance) {
    * POST /api/auth/register
    * 회원가입: 새로운 사용자 계정을 생성합니다
    */
-  fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.post('/register', {
+    schema: {
+      summary: '신규 유저 회원가입',
+      description: '이메일, 비밀번호, 닉네임을 받아 새로운 유저를 생성하고 JWT 토큰을 발급합니다.',
+      tags: ['Auth'],
+      body: {
+        type: 'object',
+        required: ['email', 'password', 'nickname'],
+        properties: {
+          email: { type: 'string', format: 'email', description: '사용자 이메일' },
+          password: { type: 'string', minLength: 8, description: '비밀번호 (8자 이상)' },
+          nickname: { type: 'string', description: '서비스에서 사용할 닉네임' },
+        },
+      },
+      response: {
+        201: {
+          description: '회원가입 성공',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                user: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'integer' },
+                    email: { type: 'string' },
+                    nickname: { type: 'string' },
+                    introViewed: { type: 'boolean' },
+                    createdAt: { type: 'string', format: 'date-time' }
+                  }
+                },
+                token: { type: 'string', description: 'JWT Access Token' }
+              }
+            }
+          }
+        },
+        400: {
+          description: '입력값 검증 실패 (Zod Error)',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: '입력값이 올바르지 않습니다.' },
+            details: { type: 'object', additionalProperties: true }
+          }
+        },
+        409: {
+          description: '이메일 중복',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: '이미 사용 중인 이메일입니다.' }
+          }
+        },
+        500: {
+          description: '서버 오류',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            error: { type: 'string', example: '서버 오류가 발생했습니다.' }
+          }
+        }
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = registerSchema.parse(request.body);
       const { email, password, nickname } = body;

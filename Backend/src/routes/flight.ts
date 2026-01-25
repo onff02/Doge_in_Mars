@@ -12,6 +12,11 @@ import {
   analyzeInvestingStyle,
   generateAdvice,
   getInvestingStyleKorean,
+  calculateEventThrust,
+  calculateEventBasedFuelConsumption,
+  calculateEventBasedHullDamage,
+  judgeUserChoice,
+  calculateFinalEnding,
 } from '../utils/gameLogic.js';
 
 export async function flightRoutes(fastify: FastifyInstance) {
@@ -274,9 +279,9 @@ export async function flightRoutes(fastify: FastifyInstance) {
       }
 
       const rocket = {
-        boostStat: session.rocket.boostStat,
-        armorStat: session.rocket.armorStat,
-        fuelEcoStat: session.rocket.fuelEcoStat,
+        boostStat: session.rocket.boost,
+        armorStat: session.rocket.armor,
+        fuelEcoStat: session.rocket.fuelEco,
       };
 
       // 중력파 변동률 계산
@@ -564,6 +569,596 @@ export async function flightRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       console.error('Get logs error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: '서버 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  // ============================================
+  // 라운드 기반 이벤트 시스템 API
+  // ============================================
+
+  /**
+   * GET /api/flight/round/news
+   * 현재 라운드 뉴스 조회: 뉴스 3종 세트 (가짜 정보) 제공
+   */
+  fastify.get('/round/news', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.user;
+
+      // 진행 중인 세션 조회
+      const session = await prisma.flightSession.findFirst({
+        where: {
+          userId,
+          status: 'IN_PROGRESS',
+        },
+        include: {
+          rocket: true,
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: '진행 중인 항해가 없습니다.',
+        });
+      }
+
+      const currentRound = session.currentRound;
+
+      // 현재 라운드의 이벤트 조회 (Global + 해당 로켓 Specific)
+      const events = await prisma.gameEvent.findMany({
+        where: {
+          round: currentRound,
+          OR: [
+            { isGlobal: true },
+            { targetRocketId: session.rocketId },
+          ],
+        },
+        orderBy: { isGlobal: 'desc' }, // Global 이벤트 먼저
+      });
+
+      if (events.length === 0) {
+        return reply.status(404).send({
+          success: false,
+          error: `라운드 ${currentRound}의 이벤트가 없습니다.`,
+        });
+      }
+
+      // 뉴스 3종 세트로 구조화 (반전 결과는 숨김)
+      const newsData = events.map(event => ({
+        id: event.id,
+        round: event.round,
+        isGlobal: event.isGlobal,
+        
+        // 뉴스 3종 세트
+        news: {
+          title: '📡 심우주 센서',
+          content: event.newsTitle.replace('📡 [심우주 센서] ', ''),
+        },
+        navigator: {
+          title: '🤖 AI 네비게이터',
+          content: event.newsDetail.replace('🤖 [AI 네비게이터] ', ''),
+        },
+        log: {
+          title: '📜 항해 기록',
+          content: event.newsLog.replace('📜 [항해 기록] ', ''),
+        },
+        
+        // 기존 필드도 유지 (호환성)
+        newsTitle: event.newsTitle,
+        newsDetail: event.newsDetail,
+        newsLog: event.newsLog,
+        // 반전 여부나 실제 결과는 공개하지 않음
+      }));
+
+      // 세션 상태를 NEWS로 업데이트
+      await prisma.flightSession.update({
+        where: { id: session.id },
+        data: { roundPhase: 'NEWS' },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          currentRound,
+          totalRounds: 6,
+          phase: 'NEWS',
+          events: newsData,
+        },
+      });
+    } catch (error) {
+      console.error('Get round news error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: '서버 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  /**
+   * POST /api/flight/round/start
+   * 라운드 플레이 시작: 뉴스를 보고 플레이 단계로 전환
+   */
+  fastify.post('/round/start', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.user;
+
+      const session = await prisma.flightSession.findFirst({
+        where: {
+          userId,
+          status: 'IN_PROGRESS',
+        },
+        include: {
+          rocket: true,
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: '진행 중인 항해가 없습니다.',
+        });
+      }
+
+      // PLAYING 상태로 전환
+      await prisma.flightSession.update({
+        where: { id: session.id },
+        data: { roundPhase: 'PLAYING' },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          currentRound: session.currentRound,
+          phase: 'PLAYING',
+          message: `라운드 ${session.currentRound} 플레이를 시작합니다.`,
+          currentFuel: session.currentFuel,
+          currentHull: session.currentHull,
+          distance: session.distance,
+        },
+      });
+    } catch (error) {
+      console.error('Round start error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: '서버 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  /**
+   * POST /api/flight/round/end
+   * 라운드 종료 및 결과 공개: 반전 결과와 스탯 기반 추력 계산
+   */
+  fastify.post('/round/end', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.user;
+      const body = request.body as { fuelInput: number };
+      const fuelInput = body.fuelInput ?? 50;
+
+      const session = await prisma.flightSession.findFirst({
+        where: {
+          userId,
+          status: 'IN_PROGRESS',
+        },
+        include: {
+          rocket: true,
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: '진행 중인 항해가 없습니다.',
+        });
+      }
+
+      const currentRound = session.currentRound;
+
+      // 현재 라운드의 이벤트 조회
+      const events = await prisma.gameEvent.findMany({
+        where: {
+          round: currentRound,
+          OR: [
+            { isGlobal: true },
+            { targetRocketId: session.rocketId },
+          ],
+        },
+      });
+
+      // 로켓 스탯
+      const rocket = {
+        boostStat: session.rocket.boost,
+        armorStat: session.rocket.armor,
+        fuelEcoStat: session.rocket.fuelEco,
+      };
+
+      // 이벤트별 결과 계산
+      const eventResults = events.map(event => {
+        const eventData = {
+          round: event.round,
+          isGlobal: event.isGlobal,
+          thrustMod: event.thrustMod,
+          isTwist: event.isTwist,
+          twistType: event.twistType as 'NONE' | 'POSITIVE' | 'NEGATIVE',
+          globalType: event.globalType as 'BEAR_TRAP' | 'BULL_RUN' | 'BUBBLE_BURST' | 'NEUTRAL' | null,
+          affectedStat: event.affectedStat as 'boost' | 'armor' | 'fuelEco' | null,
+          statMultiplier: event.statMultiplier,
+          targetRocketId: event.targetRocketId,
+        };
+
+        const result = calculateEventThrust(eventData, rocket, session.rocketId);
+
+        return {
+          eventId: event.id,
+          isGlobal: event.isGlobal,
+          
+          // 원래 뉴스 정보 (가짜)
+          originalNews: {
+            news: event.newsTitle.replace('📡 [심우주 센서] ', ''),
+            navigator: event.newsDetail.replace('🤖 [AI 네비게이터] ', ''),
+            log: event.newsLog.replace('📜 [항해 기록] ', ''),
+          },
+          
+          // 반전 정보
+          isTwist: event.isTwist,
+          twistType: event.twistType,
+          
+          // 실제 결과
+          actualResult: {
+            title: '⚡ 실제 결과',
+            content: result.description,
+          },
+          
+          ...result,
+        };
+      });
+
+      // 최종 추력 배율 계산 (모든 이벤트 효과 합산)
+      let totalThrustMultiplier = 1.0;
+      let totalFuelModifier = 1.0;
+      let totalHullDamageModifier = 1.0;
+      let overallPositive = true; // 전체적으로 긍정적인 라운드인지
+
+      for (const result of eventResults) {
+        totalThrustMultiplier *= result.thrustMultiplier;
+        totalFuelModifier *= result.fuelModifier;
+        totalHullDamageModifier *= result.hullDamageModifier;
+        if (!result.isPositiveOutcome) {
+          overallPositive = false;
+        }
+      }
+
+      // 🎯 정답 판정: 유저의 선택이 올바른지
+      const choiceResult = judgeUserChoice(fuelInput, overallPositive);
+      const isCorrect = choiceResult.isCorrectChoice;
+
+      // 기본 계산
+      const baseFuelConsumption = (fuelInput / 100) * 10; // 기본 연료 소모
+      const baseDistance = (fuelInput / 100) * 20; // 기본 이동 거리
+      const baseHullDamage = eventResults.some(r => !r.isPositiveOutcome) ? 5 : 0;
+
+      // 이벤트 효과 적용
+      const actualFuelConsumed = calculateEventBasedFuelConsumption(baseFuelConsumption, {
+        thrustMultiplier: totalThrustMultiplier,
+        fuelModifier: totalFuelModifier,
+        hullDamageModifier: totalHullDamageModifier,
+        isPositiveOutcome: true,
+        description: '',
+      });
+      const actualDistance = baseDistance * totalThrustMultiplier;
+      const actualHullDamage = calculateEventBasedHullDamage(baseHullDamage, {
+        thrustMultiplier: totalThrustMultiplier,
+        fuelModifier: totalFuelModifier,
+        hullDamageModifier: totalHullDamageModifier,
+        isPositiveOutcome: true,
+        description: '',
+      });
+
+      // 새 상태 계산
+      const newFuel = Math.max(0, session.currentFuel - actualFuelConsumed);
+      const newHull = Math.max(0, session.currentHull - actualHullDamage);
+      const newDistance = Math.min(config.game.targetDistance, session.distance + actualDistance);
+      const newCorrectAnswers = session.correctAnswers + (isCorrect ? 1 : 0);
+
+      // 6라운드 종료 또는 게임 오버 체크
+      let newStatus = session.status;
+      let isGameOver = false;
+      let gameOverReason = '';
+      let finalEndingData = null;
+
+      // 연료/선체 고갈 체크
+      if (newFuel <= 0 || newHull <= 0) {
+        newStatus = 'FAILED';
+        isGameOver = true;
+        gameOverReason = newFuel <= 0 ? '연료가 고갈되었습니다!' : '선체가 파괴되었습니다!';
+      }
+      // 6라운드 완료 체크
+      else if (currentRound >= 6) {
+        newStatus = 'COMPLETED';
+        isGameOver = true;
+        gameOverReason = '모든 라운드를 완료했습니다!';
+        finalEndingData = calculateFinalEnding(newCorrectAnswers);
+      }
+
+      // 다음 라운드로 진행 또는 게임 종료
+      const nextRound = isGameOver ? currentRound : Math.min(6, currentRound + 1);
+      const nextPhase = isGameOver ? 'RESULT' : 'NEWS';
+
+      // 세션 업데이트
+      await prisma.flightSession.update({
+        where: { id: session.id },
+        data: {
+          currentFuel: newFuel,
+          currentHull: newHull,
+          distance: newDistance,
+          currentRound: nextRound,
+          roundPhase: nextPhase,
+          totalFuelUsed: { increment: actualFuelConsumed },
+          correctAnswers: newCorrectAnswers,
+          status: newStatus,
+          ...(finalEndingData && { finalEnding: finalEndingData.ending }),
+        },
+      });
+
+      // 로그 기록 (정답 여부 포함)
+      const globalEvent = eventResults.find(e => e.isGlobal);
+      await prisma.flightLog.create({
+        data: {
+          sessionId: session.id,
+          round: currentRound,
+          yValue: 0,
+          fuelInput,
+          fuelAfter: newFuel,
+          hullAfter: newHull,
+          distanceAfter: newDistance,
+          eventId: globalEvent?.eventId ?? null,
+          thrustMultiplier: totalThrustMultiplier,
+          wasRevealed: true,
+          eventDescription: eventResults.map(r => r.description).join(' | '),
+          // 정답 판정 정보
+          isPositiveEvent: overallPositive,
+          userChoseFuel: choiceResult.userChoseFuel,
+          isCorrectChoice: isCorrect,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          currentRound,
+          phase: 'RESULT',
+          
+          // 이벤트 결과 (반전 공개)
+          eventResults,
+          
+          // 🎯 정답 판정 결과
+          choiceResult: {
+            ...choiceResult,
+            fuelInput,
+            correctAnswersSoFar: newCorrectAnswers,
+            totalRounds: 6,
+          },
+          
+          // 최종 계산 결과
+          totalThrustMultiplier,
+          actualFuelConsumed,
+          actualDistance,
+          actualHullDamage,
+          
+          // 현재 상태
+          currentFuel: newFuel,
+          currentHull: newHull,
+          distance: newDistance,
+          progress: (newDistance / config.game.targetDistance) * 100,
+          
+          // 다음 단계
+          nextRound,
+          isGameOver,
+          gameOverReason,
+          status: newStatus,
+          
+          // Final 엔딩 (게임 종료 시에만)
+          finalEnding: finalEndingData,
+        },
+      });
+    } catch (error) {
+      console.error('Round end error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: '서버 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  /**
+   * POST /api/flight/round/next
+   * 다음 라운드로 이동
+   */
+  fastify.post('/round/next', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.user;
+
+      const session = await prisma.flightSession.findFirst({
+        where: {
+          userId,
+          status: 'IN_PROGRESS',
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: '진행 중인 항해가 없습니다.',
+        });
+      }
+
+      if (session.currentRound >= 6) {
+        return reply.status(400).send({
+          success: false,
+          error: '마지막 라운드입니다.',
+        });
+      }
+
+      // 다음 라운드로 업데이트
+      const updatedSession = await prisma.flightSession.update({
+        where: { id: session.id },
+        data: {
+          currentRound: { increment: 1 },
+          roundPhase: 'NEWS',
+        },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          previousRound: session.currentRound,
+          currentRound: updatedSession.currentRound,
+          phase: 'NEWS',
+          message: `라운드 ${updatedSession.currentRound}로 이동합니다.`,
+        },
+      });
+    } catch (error) {
+      console.error('Round next error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: '서버 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  /**
+   * GET /api/flight/round/status
+   * 현재 라운드 상태 조회
+   */
+  fastify.get('/round/status', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.user;
+
+      const session = await prisma.flightSession.findFirst({
+        where: {
+          userId,
+          status: 'IN_PROGRESS',
+        },
+        include: {
+          rocket: true,
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: '진행 중인 항해가 없습니다.',
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          currentRound: session.currentRound,
+          totalRounds: 6,
+          phase: session.roundPhase,
+          currentFuel: session.currentFuel,
+          currentHull: session.currentHull,
+          distance: session.distance,
+          progress: (session.distance / config.game.targetDistance) * 100,
+          correctAnswers: session.correctAnswers,
+          rocket: {
+            name: session.rocket.name,
+            boost: session.rocket.boost,
+            armor: session.rocket.armor,
+            fuelEco: session.rocket.fuelEco,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Round status error:', error);
+      return reply.status(500).send({
+        success: false,
+        error: '서버 오류가 발생했습니다.',
+      });
+    }
+  });
+
+  /**
+   * GET /api/flight/final
+   * Final 엔딩 결과 조회: 게임 종료 후 엔딩 정보 및 라운드별 결과 요약
+   */
+  fastify.get('/final', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { userId } = request.user;
+
+      // 가장 최근 완료/실패 세션 조회
+      const session = await prisma.flightSession.findFirst({
+        where: {
+          userId,
+          status: { in: ['COMPLETED', 'FAILED'] },
+        },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          rocket: true,
+          logs: {
+            orderBy: { round: 'asc' },
+          },
+        },
+      });
+
+      if (!session) {
+        return reply.status(404).send({
+          success: false,
+          error: '완료된 항해가 없습니다.',
+        });
+      }
+
+      // Final 엔딩 계산
+      const finalEnding = calculateFinalEnding(session.correctAnswers);
+
+      // 라운드별 결과 요약
+      const roundSummary = session.logs
+        .filter(log => log.isCorrectChoice !== null)
+        .map(log => ({
+          round: log.round,
+          fuelInput: log.fuelInput,
+          isCorrect: log.isCorrectChoice,
+          wasPositiveEvent: log.isPositiveEvent,
+          userChoseFuel: log.userChoseFuel,
+          explanation: log.isCorrectChoice
+            ? (log.isPositiveEvent ? '✅ 호재 감지 성공' : '✅ 악재 회피 성공')
+            : (log.isPositiveEvent ? '❌ 호재 기회 놓침' : '❌ 악재 판단 실패'),
+        }));
+
+      return reply.send({
+        success: true,
+        data: {
+          // 세션 정보
+          sessionId: session.id,
+          status: session.status,
+          rocket: session.rocket.name,
+          
+          // 정답 통계
+          correctAnswers: session.correctAnswers,
+          totalRounds: 6,
+          accuracy: Math.round((session.correctAnswers / 6) * 100),
+          
+          // Final 엔딩
+          finalEnding,
+          
+          // 라운드별 결과
+          roundSummary,
+          
+          // 최종 상태
+          finalStats: {
+            fuel: session.currentFuel,
+            hull: session.currentHull,
+            distance: session.distance,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Get final error:', error);
       return reply.status(500).send({
         success: false,
         error: '서버 오류가 발생했습니다.',

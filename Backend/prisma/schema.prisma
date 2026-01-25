@@ -26,17 +26,62 @@ model User {
 
 // 로켓 스펙 (PER, PBR, ROE 매핑)
 model Rocket {
-  id          Int             @id @default(autoincrement())
-  name        String          @unique
-  description String?
-  boostStat   Float           // PER 기반 - 가속 폭발력 (낮을수록 강력)
-  armorStat   Float           // PBR 기반 - 선체 내구도 (낮을수록 단단함)
-  fuelEcoStat Float           // ROE 기반 - 연비 효율 (높을수록 알뜰함)
-  imageUrl    String?
-  sessions    FlightSession[]
-  createdAt   DateTime        @default(now())
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  category  String   // Growth, Blue-Chip, Dividend
+  boost     Float    // PER 매핑: 가속 폭발력
+  fuelEco   Float    // ROE 매핑: 연비 효율
+  armor     Float    // PBR 매핑: 선체 내구도
+  events    GameEvent[]
+  sessions  FlightSession[]
 
   @@map("rockets")
+}
+
+// 반전 결과 유형 Enum
+enum TwistType {
+  NONE           // 반전 없음
+  POSITIVE       // 긍정적 반전 (악재→호재)
+  NEGATIVE       // 부정적 반전 (호재→악재)
+}
+
+// Global 이벤트 유형 Enum
+enum GlobalEventType {
+  BEAR_TRAP      // 하락장 함정 (Armor 높으면 반등)
+  BULL_RUN       // 상승장 (Boost 비례 가속)
+  BUBBLE_BURST   // 버블 붕괴 (Boost 높으면 페널티)
+  NEUTRAL        // 중립
+}
+
+model GameEvent {
+  id             Int      @id @default(autoincrement())
+  round          Int
+  isGlobal       Boolean  @default(true)
+  targetRocketId Int?     // Specific 이벤트일 경우 해당 로켓 ID
+  rocket         Rocket?  @relation(fields: [targetRocketId], references: [id])
+  
+  // 정보 시스템 3종 세트
+  newsTitle      String   // 심우주 센서 (뉴스 제목)
+  newsDetail     String   // AI 네비게이터 (분석 멘트)
+  newsLog        String   // 항해 기록 (과거 데이터)
+  
+  thrustMod      Float    // 기본 추력 배율 (1.5, 0.7 등)
+  isTwist        Boolean  @default(false) // 반전 여부
+  twistType      TwistType @default(NONE) // 반전 유형 (Pos/Neg)
+  globalType     GlobalEventType? // Global 이벤트 유형 (Bear Trap, Bull Run 등)
+  
+  // 스탯 연동 필드
+  affectedStat   String?  // 영향받는 스탯 (boost, armor, fuelEco)
+  statMultiplier Float?   // 스탯 배율 (스탯 값에 곱해지는 계수)
+
+  @@map("game_events")
+}
+
+// 라운드 진행 단계 Enum
+enum RoundPhase {
+  NEWS              // 뉴스 공개 단계 (가짜 정보)
+  PLAYING           // 플레이 단계 (유저 입력)
+  RESULT            // 결과 공개 단계 (반전 공개)
 }
 
 // 세션 상태 Enum
@@ -55,6 +100,14 @@ enum InvestingStyle {
   DEFENSIVE             // 방어적 투자자
 }
 
+// Final 엔딩 Enum
+enum FinalEnding {
+  CRASH               // 0~1개 정답: 화성 도작 실패
+  TENT                // 2~3개 정답: 도지 텐트촌 건설
+  CITY                // 4~5개 정답: 도지 도시 건설
+  INVASION            // 6개 정답: 도지 지구 침공
+}
+
 // 항해 세션 (실시간 데이터 동기화용)
 model FlightSession {
   id                       Int           @id @default(autoincrement())
@@ -64,6 +117,8 @@ model FlightSession {
   rocket                   Rocket        @relation(fields: [rocketId], references: [id])
   
   // 현재 상태
+  currentRound             Int           @default(1)      // 현재 라운드 (1~6)
+  roundPhase               RoundPhase    @default(NEWS)   // 라운드 진행 단계
   currentFuel              Float         @default(100.0)  // 현재 연료
   currentHull              Float         @default(100.0)  // 현재 선체 내구도
   distance                 Float         @default(0.0)    // 이동 거리 (화성까지의 진행도)
@@ -79,8 +134,12 @@ model FlightSession {
   // 세션 상태
   status                   SessionStatus @default(IN_PROGRESS)
   
+  // 정답 수 추적 (뉴스 해석 성공 횟수)
+  correctAnswers           Int           @default(0)      // 정답 개수 (0~6)
+  
   // 엔딩 결과
   tier                     String?       // S, A, B, C, D, F
+  finalEnding              FinalEnding?  // 최종 엔딩 (정답 수 기반)
   investingStyle           InvestingStyle?
   advice                   String?
   
@@ -97,6 +156,9 @@ model FlightLog {
   sessionId Int
   session   FlightSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   
+  // 라운드 정보
+  round     Int           @default(1)   // 이 로그가 기록된 라운드
+  
   yValue    Float         // 중력파 안정도 (주가)
   fuelInput Float         // 유저의 슬라이더 입력값 (0~100)
   
@@ -104,6 +166,17 @@ model FlightLog {
   fuelAfter Float?        // 이 액션 후 남은 연료
   hullAfter Float?        // 이 액션 후 남은 선체 내구도
   distanceAfter Float?    // 이 액션 후 총 이동 거리
+  
+  // 이벤트 결과 기록
+  eventId          Int?             // 적용된 이벤트 ID
+  thrustMultiplier Float?           // 적용된 추력 배율
+  wasRevealed      Boolean @default(false)  // 반전이 공개되었는지
+  eventDescription String?          // 이벤트 결과 설명
+  
+  // 정답 판정
+  isPositiveEvent  Boolean?         // 이벤트가 실제로 긍정적이었는지
+  userChoseFuel    Boolean?         // 유저가 연료 공급을 선택했는지 (fuelInput >= 50)
+  isCorrectChoice  Boolean?         // 정답 여부 (Pos+연료 O, Neg+연료 X)
   
   timestamp DateTime      @default(now())
 
