@@ -101,6 +101,23 @@ async function buildApp() {
     };
   });
 
+  fastify.get('/api/db-test', async () => {
+    try {
+      // Prisma를 사용하여 간단한 DB 쿼리 실행 (예: 로켓 목록 개수 확인)
+      const rocketCount = await prisma.rocket.count(); 
+      return {
+        success: true,
+        message: "RDS 데이터베이스와 연결되었습니다!",
+        rocketCount
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: "DB 연결에 실패했습니다."
+      };
+    }
+  });
+
   // 라우트 등록
   await fastify.register(authRoutes, { prefix: '/api/auth' });
   await fastify.register(flightRoutes, { prefix: '/api/flight' });
