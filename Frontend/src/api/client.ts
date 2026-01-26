@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export const API_BASE_URL = "http://10.0.2.2:3000";
+export const API_BASE_URL = "http://43.202.45.31:3000";
 export const AUTH_TOKEN_KEY = "auth_token";
 export const AUTH_USER_KEY = "auth_user";
 
@@ -117,6 +117,16 @@ export type FlightSyncResponse = {
 
 export async function getAuthToken(): Promise<string | null> {
   return AsyncStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export async function getAuthUser(): Promise<AuthUser | null> {
+  const raw = await AsyncStorage.getItem(AUTH_USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
 }
 
 export async function saveAuthSession(payload: { token: string; user: AuthUser }): Promise<void> {

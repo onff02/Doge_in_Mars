@@ -187,7 +187,7 @@ export default function RocketSelectScreen() {
 
   const handleConfirm = () => {
     if (selectedRocket) {
-      nav.navigate("Cockpit", { rocketId: selectedRocket });
+      nav.replace("Cockpit", { rocketId: selectedRocket, round: 1, startInRound: true });
     }
   };
 

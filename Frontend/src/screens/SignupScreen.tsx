@@ -42,7 +42,7 @@ export default function SignupScreen() {
     try {
       const response = await registerUser({ email: trimmedEmail, password, nickname: nickname.trim() });
       await saveAuthSession({ token: response.token, user: response.user });
-      nav.navigate("Intro");
+      nav.replace("Start");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Sign up failed. Please try again.";
       setError(message);

@@ -14,7 +14,13 @@ export type RootStackParamList = {
   Signup: undefined;
   Intro: undefined;
   RocketSelect: undefined;
-  Cockpit: { rocketId?: number } | undefined;
+  Cockpit:
+    | {
+        rocketId?: number;
+        round?: number;
+        startInRound?: boolean;
+      }
+    | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

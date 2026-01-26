@@ -24,11 +24,7 @@ export default function LoginScreen() {
       const trimmedEmail = email.trim();
       const response = await loginUser({ email: trimmedEmail, password });
       await saveAuthSession({ token: response.token, user: response.user });
-      if (response.introViewed) {
-        nav.navigate("RocketSelect");
-      } else {
-        nav.navigate("Intro");
-      }
+      nav.replace("Start");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Login failed. Please try again.";
       setError(message);

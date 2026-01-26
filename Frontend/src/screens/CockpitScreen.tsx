@@ -1,19 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ImageBackground, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../navigation";
 import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
-import InfoScreen from "./InfoScreen";
+import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
 import { getAuthToken, getChart, getFlightStatus, startFlight, syncFlight } from "../api/client";
-
-type StatusItem = {
-  label: string;
-  value: string;
-  color: string;
-};
 
 type Telemetry = {
   fuel?: number;
@@ -22,6 +16,10 @@ type Telemetry = {
   isStable?: boolean;
   status?: string;
 };
+
+const BG_IMAGE =
+  "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
+const MAX_ROUNDS = 6;
 
 function generateGsiData(points: number) {
   const data: number[] = [];
@@ -36,16 +34,22 @@ function generateGsiData(points: number) {
 export default function CockpitScreen() {
   const route = useRoute<RouteProp<RootStackParamList, "Cockpit">>();
   const rocketId = route.params?.rocketId ?? 1;
+  const startInRound = route.params?.startInRound ?? false;
+  const initialRound = route.params?.round ?? 1;
   const { width, height } = useWindowDimensions();
-  const [view, setView] = useState<"cockpit" | "chart" | "info">("cockpit");
-  const [leverPosition, setLeverPosition] = useState<"up" | "down">("down");
+  const [view, setView] = useState<"cockpit" | "chart" | "info" | "round">(
+    startInRound ? "round" : "cockpit"
+  );
+  const [round, setRound] = useState(() => Math.min(Math.max(initialRound, 1), MAX_ROUNDS));
+  const [leverPosition, setLeverPosition] = useState<"up" | "middle" | "down">("middle");
   const [telemetry, setTelemetry] = useState<Telemetry>({});
   const [chartValues, setChartValues] = useState<number[]>([]);
   const [stabilityValues, setStabilityValues] = useState<number[]>([]);
   const [symbol, setSymbol] = useState("AAPL");
   const [error, setError] = useState("");
+  const [decisionError, setDecisionError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [hasInteracted, setHasInteracted] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const chartCursor = useRef(1);
 
   const fallbackData = useMemo(() => generateGsiData(40), []);
@@ -65,34 +69,57 @@ export default function CockpitScreen() {
     return { width: frameW, height: frameH };
   }, [height, width]);
 
-  const chartWidth = Math.max(200, Math.min(frame.width * 0.33, 260));
-  const chartHeight = Math.max(120, Math.min(frame.height * 0.45, 180));
-  const trackHeight = 170;
-  const knobHeight = 30;
-  const topInset = 16;
-  const bottomInset = 18;
-  const knobBottom = leverPosition === "down" ? bottomInset : trackHeight - topInset - knobHeight;
+  const sidePanelWidth = Math.max(190, Math.min(frame.width * 0.3, 260));
+  const sidePanelHeight = Math.max(180, Math.min(frame.height * 0.55, 240));
+  const centerWidth = Math.max(150, Math.min(frame.width * 0.22, 190));
+  const centerHeight = Math.max(230, Math.min(frame.height * 0.65, 300));
+  const chartWidth = Math.max(160, sidePanelWidth - 24);
+  const chartHeight = Math.max(90, Math.min(sidePanelHeight * 0.45, 120));
+  const trackHeight = Math.max(120, Math.min(centerHeight * 0.6, 150));
+  const handleHeight = 46;
+  const leverMargin = 10;
+  const leverRange = trackHeight - handleHeight - leverMargin * 2;
+  const handleBottom =
+    leverPosition === "up" ? leverMargin + leverRange : leverPosition === "down" ? leverMargin : leverMargin + leverRange / 2;
+  const leverRotation = "0deg";
   const swipeThreshold = 18;
+  const contentTop = Math.max(12, frame.height * 0.16);
+  const roundLabel = `ROUND ${round}`;
+  const roundCopy = "지금까지의 중력장 안정도 차트와 최신 정보를 바탕으로 연료 소모량을 결정하세요.";
+  const confirmDisabled = isConfirming || leverPosition === "middle";
 
-  const updateLeverPosition = useCallback((next: "up" | "down") => {
-    setLeverPosition(next);
-    setHasInteracted(true);
-  }, []);
+  const updateLeverPosition = useCallback(
+    (next: "up" | "middle" | "down") => {
+      setLeverPosition(next);
+      if (decisionError) {
+        setDecisionError("");
+      }
+    },
+    [decisionError]
+  );
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > Math.abs(gesture.dx),
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy <= -swipeThreshold) updateLeverPosition("up");
-        else if (gesture.dy >= swipeThreshold) updateLeverPosition("down");
-      },
-      onPanResponderTerminate: (_, gesture) => {
-        if (gesture.dy <= -swipeThreshold) updateLeverPosition("up");
-        else if (gesture.dy >= swipeThreshold) updateLeverPosition("down");
-      },
-    })
-  ).current;
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy <= -swipeThreshold) {
+            updateLeverPosition(leverPosition === "down" ? "middle" : "up");
+          } else if (gesture.dy >= swipeThreshold) {
+            updateLeverPosition(leverPosition === "up" ? "middle" : "down");
+          }
+        },
+        onPanResponderTerminate: (_, gesture) => {
+          if (gesture.dy <= -swipeThreshold) {
+            updateLeverPosition(leverPosition === "down" ? "middle" : "up");
+          } else if (gesture.dy >= swipeThreshold) {
+            updateLeverPosition(leverPosition === "up" ? "middle" : "down");
+          }
+        },
+      }),
+    [leverPosition, swipeThreshold, updateLeverPosition]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -165,42 +192,44 @@ export default function CockpitScreen() {
     };
   }, [rocketId, symbol]);
 
-  useEffect(() => {
-    if (!hasInteracted || chartValues.length < 2) return;
+  const handleConfirm = useCallback(async () => {
+    setDecisionError("");
+    if (leverPosition === "middle") {
+      setDecisionError("연료 소모를 위 또는 아래로 선택해주세요.");
+      return;
+    }
+    if (chartValues.length < 2) {
+      setDecisionError("차트 데이터를 불러오는 중입니다.");
+      return;
+    }
 
-    let isMounted = true;
-
-    const sync = async () => {
-      try {
-        const fuelInput = leverPosition === "up" ? 80 : 20;
-        const index = Math.min(chartCursor.current, chartValues.length - 1);
-        const yValue = chartValues[index];
-        const previousYValue = chartValues[index - 1] ?? yValue;
-        const response = await syncFlight({ fuelInput, yValue, previousYValue });
-        if (isMounted) {
-          setTelemetry({
-            fuel: response.currentFuel,
-            hull: response.currentHull,
-            progress: response.progress,
-            isStable: response.isStableZone,
-            status: response.status,
-          });
-          chartCursor.current = Math.min(index + 1, chartValues.length - 1);
-        }
-      } catch (e) {
-        if (isMounted) {
-          const message = e instanceof Error ? e.message : "Sync failed.";
-          setError(message);
-        }
+    setIsConfirming(true);
+    try {
+      const fuelInput = leverPosition === "up" ? 80 : 20;
+      const index = Math.min(chartCursor.current, chartValues.length - 1);
+      const yValue = chartValues[index];
+      const previousYValue = chartValues[index - 1] ?? yValue;
+      const response = await syncFlight({ fuelInput, yValue, previousYValue });
+      setTelemetry({
+        fuel: response.currentFuel,
+        hull: response.currentHull,
+        progress: response.progress,
+        isStable: response.isStableZone,
+        status: response.status,
+      });
+      chartCursor.current = Math.min(index + 1, chartValues.length - 1);
+      setLeverPosition("middle");
+      if (round < MAX_ROUNDS) {
+        setRound(round + 1);
+        setView("round");
       }
-    };
-
-    sync();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [chartValues, hasInteracted, leverPosition]);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Sync failed.";
+      setDecisionError(message);
+    } finally {
+      setIsConfirming(false);
+    }
+  }, [chartValues, leverPosition, round]);
 
   const latestChange = stabilityValues[stabilityValues.length - 1] ?? 0;
   const stableSignal = telemetry.isStable ?? latestChange >= 0;
@@ -209,72 +238,173 @@ export default function CockpitScreen() {
 
   const fuelValue = telemetry.fuel !== undefined ? `${Math.round(telemetry.fuel)}%` : "Optimal";
   const hullValue = telemetry.hull !== undefined ? `${Math.round(telemetry.hull)}%` : "Nominal";
-  const fuelColor = telemetry.fuel !== undefined && telemetry.fuel < 30 ? theme.colors.warning : theme.colors.success;
-  const hullColor = telemetry.hull !== undefined && telemetry.hull < 30 ? theme.colors.danger : theme.colors.accent;
+  const progressValue = telemetry.progress !== undefined ? `${Math.round(telemetry.progress)}%` : "Pending";
 
-  const statusItems: StatusItem[] = [
-    { label: "Engine", value: stableSignal ? "Stable" : "Turbulent", color: signalColor },
-    { label: "Hull", value: hullValue, color: hullColor },
-    { label: "Fuel", value: fuelValue, color: fuelColor },
-  ];
+  const updates = useMemo<UpdateItem[]>(() => {
+    const items: UpdateItem[] = [];
+    if (error) {
+      items.push({ time: "00:38", message: `Alert: ${error}`, tone: "warning" });
+    }
+    items.push({
+      time: "00:34",
+      message: `Round ${round} / ${MAX_ROUNDS} briefing active`,
+      tone: "info",
+    });
+    items.push({
+      time: "00:31",
+      message: `Signal ${stableSignal ? "locked" : "drifting"} on ${symbol}`,
+      tone: stableSignal ? "success" : "warning",
+    });
+    items.push({
+      time: "00:28",
+      message: telemetry.status ? `Guidance: ${telemetry.status}` : "Guidance loop synchronized",
+      tone: "info",
+    });
+    items.push({
+      time: "00:24",
+      message: `Fuel flow ${
+        leverPosition === "up" ? "boosted" : leverPosition === "down" ? "reduced" : "balanced"
+      } | ${fuelValue} remaining`,
+      tone: "info",
+    });
+    items.push({
+      time: "00:21",
+      message: `Hull ${hullValue} | Jump ${progressValue}`,
+      tone: telemetry.hull !== undefined && telemetry.hull < 30 ? "warning" : "info",
+    });
+    return items;
+  }, [error, round, stableSignal, symbol, telemetry.status, leverPosition, fuelValue, hullValue, progressValue, telemetry.hull]);
+
+  const panelUpdates = updates.slice(0, 3);
+  const windowLayer = (
+    <View style={s.window} pointerEvents="none">
+      <ImageBackground source={{ uri: BG_IMAGE }} style={StyleSheet.absoluteFillObject} resizeMode="cover">
+        <View style={s.windowOverlay} />
+      </ImageBackground>
+      <View style={s.glassSheen} />
+      <View style={s.glassSheenSecondary} />
+      <View style={s.windowRim} />
+    </View>
+  );
 
   if (view === "chart") {
     return <ChartScreen data={gsiData} onBack={() => setView("cockpit")} />;
   }
 
   if (view === "info") {
-    return <InfoScreen rocketId={rocketId} onBack={() => setView("cockpit")} />;
+    return <InfoScreen rocketId={rocketId} onBack={() => setView("cockpit")} updates={updates} />;
+  }
+
+  if (view === "round") {
+    return (
+      <View style={s.root}>
+        <View style={[s.frame, { width: frame.width, height: frame.height }]}>
+          {windowLayer}
+          <View style={s.roundContent}>
+            <View style={s.roundCard}>
+              <Text style={s.roundEyebrow}>{roundLabel}</Text>
+              <Text style={s.roundTitle}>Fuel Decision Brief</Text>
+              <Text style={s.roundCopy}>{roundCopy}</Text>
+              <Pressable style={({ pressed }) => [s.roundButton, pressed && s.roundButtonPressed]} onPress={() => setView("cockpit")}>
+                <Text style={s.roundButtonText}>GO!</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
   }
 
   return (
     <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
-        <View style={s.bg} />
-        <View style={s.topPanel} pointerEvents="none" />
-        <View style={s.bottomPanel} pointerEvents="none" />
+        {windowLayer}
 
-        <View style={s.content}>
-          <View style={s.panel}>
-            <Text style={s.panelTitle}>GRAVITY WAVE MONITOR</Text>
-            <View style={s.screen}>
-              <TrajectoryGSIChart data={gsiData} width={chartWidth} height={chartHeight} />
-            </View>
-            <View style={s.statusRow}>
-              <View style={[s.statusDot, { backgroundColor: signalColor }]} />
-              <Text style={s.statusText}>{signalText}</Text>
-            </View>
-            {error ? <Text style={s.errorText}>{error}</Text> : null}
-            <Pressable style={({ pressed }) => [s.actionButton, pressed && s.actionPressed]} onPress={() => setView("chart")}>
-              <Text style={s.actionText}>VIEW CHART</Text>
-            </Pressable>
-          </View>
+        <View style={s.console} pointerEvents="none">
+          <View style={s.consoleEdge} />
+          <View style={s.consoleGlow} />
+        </View>
 
-          <View style={s.centerPanel}>
-            <Text style={s.panelTitle}>FUEL CONTROL</Text>
-            <View style={s.fuelWrap}>
-              <Text style={s.fuelLabel}>CHOOSE ACTION</Text>
-            </View>
-            <View style={s.leverTrack}>
-              <View style={s.leverStem} />
-              <View style={[s.leverKnob, { bottom: knobBottom }]} {...panResponder.panHandlers}>
-                <View style={s.leverKnobInner} />
+        <View style={[s.content, { paddingTop: contentTop }]}>
+          <View style={s.panelRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setView("chart")}
+              style={({ pressed }) => [
+                s.sidePanel,
+                { width: sidePanelWidth, height: sidePanelHeight },
+                pressed && s.panelPressed,
+              ]}
+            >
+              <Text style={s.panelTitle}>TRAJECTORY CHART</Text>
+              <View style={s.chartWindow}>
+                <TrajectoryGSIChart data={gsiData} width={chartWidth} height={chartHeight} />
               </View>
-            </View>
-            <Text style={s.fuelHint}>Swipe up or down to choose</Text>
-          </View>
+              <View style={s.panelMeta}>
+                <View style={[s.statusDot, { backgroundColor: signalColor }]} />
+                <Text style={s.panelMetaText}>{signalText}</Text>
+              </View>
+              {error ? <Text style={s.errorText}>{error}</Text> : null}
+              <Text style={s.panelHint}>Tap to expand</Text>
+            </Pressable>
 
-          <View style={s.panel}>
-            <Text style={s.panelTitle}>SHIP STATUS</Text>
-            <View style={s.statusList}>
-              {statusItems.map((item) => (
-                <View key={item.label} style={s.statusCard}>
-                  <Text style={s.statusLabel}>{item.label}</Text>
-                  <Text style={[s.statusValue, { color: item.color }]}>{item.value}</Text>
+            <View style={[s.leverPanel, { width: centerWidth, height: centerHeight }]}>
+              <Text style={s.panelTitle}>CONTROL LEVER</Text>
+              <Text style={s.roundBadge}>{`ROUND ${round} / ${MAX_ROUNDS}`}</Text>
+              <View style={[s.leverWell, { height: trackHeight + 34 }]}>
+                <View style={[s.leverTrack, { height: trackHeight }]} />
+                <View style={[s.leverStop, { top: 10 }]} />
+                <View style={[s.leverStop, { bottom: 10 }]} />
+                <View style={[s.leverHandle, { bottom: handleBottom, transform: [{ rotate: leverRotation }] }]} {...panResponder.panHandlers}>
+                  <View style={s.leverKnob}>
+                    <View style={s.leverKnobInset} />
+                  </View>
+                  <View style={s.leverStem} />
                 </View>
-              ))}
+                <View style={s.leverBase} />
+              </View>
+              <Text style={s.leverState}>
+                {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
+              </Text>
+              <Text style={s.leverHint}>Swipe up or down</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  s.confirmButton,
+                  confirmDisabled && s.confirmDisabled,
+                  pressed && !confirmDisabled && s.confirmPressed,
+                ]}
+                onPress={handleConfirm}
+                disabled={confirmDisabled}
+              >
+                <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
+              </Pressable>
+              {decisionError ? <Text style={s.decisionError}>{decisionError}</Text> : null}
             </View>
-            <Pressable style={({ pressed }) => [s.actionButton, pressed && s.actionPressed]} onPress={() => setView("info")}>
-              <Text style={s.actionText}>DETAILS</Text>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setView("info")}
+              style={({ pressed }) => [
+                s.sidePanel,
+                { width: sidePanelWidth, height: sidePanelHeight },
+                pressed && s.panelPressed,
+              ]}
+            >
+              <Text style={s.panelTitle}>UPDATES</Text>
+              <View style={s.updateList}>
+                {panelUpdates.map((item, index) => (
+                  <View key={`${item.time}-${index}`} style={s.updateRow}>
+                    <View style={[s.updateDot, { backgroundColor: theme.colors.accent }]} />
+                    <View style={s.updateCopy}>
+                      <Text style={s.updateTime}>{item.time}</Text>
+                      <Text style={s.updateText} numberOfLines={2}>
+                        {item.message}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <Text style={s.panelHint}>Tap to expand</Text>
             </Pressable>
           </View>
         </View>
@@ -285,80 +415,171 @@ export default function CockpitScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.black },
-  frame: { backgroundColor: theme.colors.frame, borderRadius: theme.radius.xl, overflow: "hidden" },
-  bg: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.bg },
-  topPanel: { position: "absolute", top: 0, left: 0, right: 0, height: 40, backgroundColor: theme.colors.panelEdge },
-  bottomPanel: { position: "absolute", bottom: 0, left: 0, right: 0, height: 48, backgroundColor: theme.colors.panelEdge },
-  content: { flex: 1, flexDirection: "row", padding: 16, gap: 12 },
-  panel: {
-    flex: 1,
-    backgroundColor: theme.colors.panel,
-    borderRadius: theme.radius.lg,
-    padding: 12,
+  frame: {
+    backgroundColor: theme.colors.frame,
+    borderRadius: theme.radius.xl,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: theme.colors.panelBorder,
+    borderColor: "rgba(251,191,36,0.2)",
   },
-  centerPanel: {
-    flex: 0.9,
-    backgroundColor: theme.colors.panel,
-    borderRadius: theme.radius.lg,
-    padding: 12,
+  window: { ...StyleSheet.absoluteFillObject },
+  windowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
+  glassSheen: {
+    position: "absolute",
+    width: "120%",
+    height: "40%",
+    top: "-6%",
+    left: "-12%",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    transform: [{ rotate: "-12deg" }],
+  },
+  glassSheenSecondary: {
+    position: "absolute",
+    width: "120%",
+    height: "28%",
+    top: "34%",
+    left: "-20%",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    transform: [{ rotate: "-9deg" }],
+  },
+  windowRim: {
+    ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
-    borderColor: theme.colors.panelBorder,
+    borderColor: "rgba(251,191,36,0.25)",
+  },
+  console: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "42%",
+    backgroundColor: "rgba(4,7,14,0.92)",
+  },
+  consoleEdge: { position: "absolute", top: 0, left: 0, right: 0, height: 2, backgroundColor: "rgba(251,191,36,0.22)" },
+  consoleGlow: {
+    position: "absolute",
+    top: -18,
+    left: 0,
+    right: 0,
+    height: 24,
+    backgroundColor: "rgba(251,191,36,0.08)",
+  },
+  content: { flex: 1, paddingHorizontal: 18, paddingBottom: 18, justifyContent: "flex-end" },
+  panelRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 14 },
+  roundContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  roundCard: {
+    width: "80%",
+    maxWidth: 420,
+    backgroundColor: "rgba(12,17,29,0.78)",
+    borderRadius: theme.radius.lg,
+    paddingVertical: 20,
+    paddingHorizontal: 22,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
     alignItems: "center",
   },
-  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 12, letterSpacing: 0.8, marginBottom: 10 },
-  screen: { borderRadius: theme.radius.md, padding: 8, backgroundColor: theme.colors.track },
-  statusRow: { flexDirection: "row", alignItems: "center", marginTop: 10, marginBottom: 12, gap: 6 },
-  statusDot: { width: 6, height: 6, borderRadius: 999 },
-  statusText: { color: theme.colors.textMuted, fontSize: 11 },
-  errorText: { color: theme.colors.danger, fontSize: 10, marginBottom: 6 },
-  actionButton: {
-    marginTop: "auto",
-    paddingVertical: 8,
-    borderRadius: theme.radius.sm,
+  roundEyebrow: { color: theme.colors.accent, fontWeight: "800", fontSize: 12, letterSpacing: 1, marginBottom: 6 },
+  roundTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 18, marginBottom: 8 },
+  roundCopy: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 18, textAlign: "center", marginBottom: 16 },
+  roundButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 26,
+    borderRadius: theme.radius.pill,
+    backgroundColor: "rgba(234,88,12,0.8)",
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: "rgba(234,88,12,0.4)",
+    borderColor: theme.colors.accentBorderStrong,
   },
-  actionPressed: { transform: [{ scale: 0.98 }] },
-  actionText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 11, textAlign: "center", letterSpacing: 0.8 },
-  fuelWrap: { alignItems: "center", marginTop: 4, width: "100%" },
-  fuelLabel: { color: theme.colors.textAccent, fontSize: 11, marginBottom: 8, letterSpacing: 0.6 },
+  roundButtonPressed: { transform: [{ scale: 0.97 }] },
+  roundButtonText: { color: theme.colors.textPrimary, fontWeight: "900", letterSpacing: 1 },
+  sidePanel: {
+    backgroundColor: "rgba(12,17,29,0.72)",
+    borderRadius: theme.radius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.3)",
+  },
+  panelPressed: { transform: [{ scale: 0.98 }] },
+  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 11, letterSpacing: 0.8, marginBottom: 8 },
+  chartWindow: { borderRadius: theme.radius.md, padding: 6, backgroundColor: "rgba(0,0,0,0.35)" },
+  panelMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  statusDot: { width: 6, height: 6, borderRadius: 999 },
+  panelMetaText: { color: theme.colors.textMuted, fontSize: 10 },
+  errorText: { color: theme.colors.danger, fontSize: 9, marginTop: 6 },
+  panelHint: { color: theme.colors.textHint, fontSize: 9, marginTop: "auto", letterSpacing: 0.4 },
+  leverPanel: {
+    backgroundColor: "rgba(10,14,22,0.78)",
+    borderRadius: theme.radius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+    alignItems: "center",
+  },
+  roundBadge: { color: theme.colors.textAccentStrong, fontSize: 10, letterSpacing: 0.8, marginBottom: 6 },
+  leverWell: { width: 86, alignItems: "center", justifyContent: "center", position: "relative", marginTop: 4 },
   leverTrack: {
-    width: 64,
-    height: 170,
+    position: "absolute",
+    width: 60,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: theme.colors.accentBorderSoft,
-    backgroundColor: theme.colors.track,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    paddingBottom: 18,
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
-  leverStem: { position: "absolute", width: 6, top: 16, bottom: 16, borderRadius: 999, backgroundColor: theme.colors.panelBorder },
-  leverKnob: {
+  leverStop: {
     position: "absolute",
+    left: 16,
+    right: 16,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(251,191,36,0.4)",
+  },
+  leverHandle: { position: "absolute", width: 54, height: 46, alignItems: "center", justifyContent: "flex-start" },
+  leverKnob: {
     width: 46,
-    height: 30,
-    borderRadius: 12,
-    backgroundColor: "rgba(234,88,12,0.75)",
-    borderWidth: 2,
+    height: 16,
+    borderRadius: 999,
+    backgroundColor: "rgba(234,88,12,0.9)",
+    borderWidth: 1,
     borderColor: theme.colors.accentBorderStrong,
     alignItems: "center",
     justifyContent: "center",
   },
-  leverKnobInner: { width: 18, height: 6, borderRadius: 999, backgroundColor: theme.colors.textSubtle },
-  fuelHint: { marginTop: 10, color: theme.colors.textHint, fontSize: 10 },
-  statusList: { gap: 10 },
-  statusCard: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.panelBorderSoft,
+  leverKnobInset: { width: 24, height: 5, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.35)" },
+  leverStem: {
+    marginTop: 4,
+    width: 6,
+    height: 26,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.6)",
   },
-  statusLabel: { color: theme.colors.textAccent, fontSize: 10, marginBottom: 4, letterSpacing: 0.6 },
-  statusValue: { fontWeight: "800", fontSize: 12 },
+  leverBase: {
+    position: "absolute",
+    bottom: 2,
+    width: 26,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.3)",
+  },
+  leverState: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 10, letterSpacing: 0.7 },
+  leverHint: { marginTop: 4, color: theme.colors.textHint, fontSize: 9 },
+  confirmButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorderStrong,
+    backgroundColor: "rgba(234,88,12,0.55)",
+  },
+  confirmPressed: { transform: [{ scale: 0.98 }] },
+  confirmDisabled: { opacity: 0.4 },
+  confirmText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 11, letterSpacing: 0.8 },
+  decisionError: { marginTop: 6, color: theme.colors.warning, fontSize: 9, textAlign: "center" },
+  updateList: { gap: 10, marginTop: 4 },
+  updateRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
+  updateDot: { width: 6, height: 6, borderRadius: 999, marginTop: 6 },
+  updateCopy: { flex: 1 },
+  updateTime: { color: theme.colors.textAccent, fontSize: 9, marginBottom: 2 },
+  updateText: { color: theme.colors.textMuted, fontSize: 10, lineHeight: 14 },
 });

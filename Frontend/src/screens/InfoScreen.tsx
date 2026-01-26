@@ -1,24 +1,23 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import React, { useMemo } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { theme } from "../theme";
+
+export type UpdateItem = {
+  time: string;
+  message: string;
+  tone: "info" | "warning" | "success";
+};
 
 interface InfoScreenProps {
   rocketId: number;
   onBack: () => void;
+  updates: UpdateItem[];
 }
-
-type InfoItem = {
-  label: string;
-  value: string;
-  status: string;
-  color: string;
-};
 
 const rocketNames = ["PIONEER", "TITAN", "STRIKER"];
 
-export default function InfoScreen({ rocketId, onBack }: InfoScreenProps) {
+export default function InfoScreen({ rocketId, onBack, updates }: InfoScreenProps) {
   const { width, height } = useWindowDimensions();
-  const [activeTab, setActiveTab] = useState<"internal" | "external">("internal");
 
   const frame = useMemo(() => {
     const targetRatio = 932 / 430;
@@ -34,25 +33,23 @@ export default function InfoScreen({ rocketId, onBack }: InfoScreenProps) {
     return { width: frameW, height: frameH };
   }, [height, width]);
 
-  const internalData: InfoItem[] = [
-    { label: "Cabin Temp", value: "22C", status: "optimal", color: "#22c55e" },
-    { label: "Oxygen", value: "98%", status: "optimal", color: "#22c55e" },
-    { label: "Power Reserves", value: "87%", status: "good", color: "#fbbf24" },
-    { label: "Life Support", value: "Active", status: "optimal", color: "#22c55e" },
-  ];
-
-  const externalData: InfoItem[] = [
-    { label: "Hull Temp", value: "-180C", status: "normal", color: "#38bdf8" },
-    { label: "Shield Integrity", value: "96%", status: "optimal", color: "#22c55e" },
-    { label: "Radiation", value: "Low", status: "safe", color: "#22c55e" },
-    { label: "Solar Intake", value: "Charging", status: "good", color: "#fbbf24" },
-  ];
-
-  const data = activeTab === "internal" ? internalData : externalData;
   const rocketName = rocketNames[rocketId - 1] ?? "ROCKET";
-  const columns = frame.width >= 760 ? 3 : 2;
-  const gap = 10;
-  const cardWidth = (frame.width - 48 - gap * (columns - 1)) / columns;
+  const logItems = updates.length
+    ? updates
+    : [{ time: "00:00", message: "No new updates available.", tone: "info" }];
+
+  const lastSync = logItems[0]?.time ?? "00:00";
+
+  const toneColor = (tone: UpdateItem["tone"]) => {
+    switch (tone) {
+      case "warning":
+        return theme.colors.warning;
+      case "success":
+        return theme.colors.success;
+      default:
+        return theme.colors.info;
+    }
+  };
 
   return (
     <View style={s.root}>
@@ -73,52 +70,37 @@ export default function InfoScreen({ rocketId, onBack }: InfoScreenProps) {
               <Text style={s.backText}>{"< BACK TO COCKPIT"}</Text>
             </Pressable>
             <View style={s.headerCenter}>
-              <Text style={s.title}>{rocketName} DIAGNOSTICS</Text>
-              <Text style={s.subtitle}>System overview</Text>
+              <Text style={s.title}>{rocketName} UPDATES</Text>
+              <Text style={s.subtitle}>Comms and diagnostics log</Text>
             </View>
             <View style={s.headerSpacer} />
           </View>
 
-          <View style={s.tabs}>
-            <Pressable
-              onPress={() => setActiveTab("internal")}
-              style={({ pressed }) => [
-                s.tab,
-                activeTab === "internal" && s.tabActive,
-                pressed && s.tabPressed,
-              ]}
-            >
-              <Text style={[s.tabText, activeTab === "internal" && s.tabTextActive]}>INTERNAL</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setActiveTab("external")}
-              style={({ pressed }) => [
-                s.tab,
-                activeTab === "external" && s.tabActive,
-                pressed && s.tabPressed,
-              ]}
-            >
-              <Text style={[s.tabText, activeTab === "external" && s.tabTextActive]}>EXTERNAL</Text>
-            </Pressable>
+          <View style={s.metaRow}>
+            <View style={s.metaBadge}>
+              <View style={[s.statusDot, { backgroundColor: theme.colors.success }]} />
+              <Text style={s.metaText}>LIVE FEED</Text>
+            </View>
+            <Text style={s.metaTime}>Last sync {lastSync}</Text>
           </View>
 
-          <View style={[s.gridWrap, { columnGap: gap, rowGap: gap }]}>
-            {data.map((item) => (
-              <View key={item.label} style={[s.card, { width: cardWidth }]}>
-                <Text style={s.cardLabel}>{item.label}</Text>
-                <Text style={[s.cardValue, { color: item.color }]}>{item.value}</Text>
-                <View style={s.cardStatus}>
-                  <View style={[s.statusDot, { backgroundColor: item.color }]} />
-                  <Text style={s.statusText}>{item.status.toUpperCase()}</Text>
+          <ScrollView style={s.logList} contentContainerStyle={s.logContent}>
+            {logItems.map((item, index) => {
+              const color = toneColor(item.tone);
+              return (
+                <View key={`${item.time}-${index}`} style={s.logRow}>
+                  <View style={[s.logDot, { backgroundColor: color }]} />
+                  <View style={s.logCard}>
+                    <View style={s.logHeader}>
+                      <Text style={s.logTime}>{item.time}</Text>
+                      <Text style={[s.logTone, { color }]}>{item.tone.toUpperCase()}</Text>
+                    </View>
+                    <Text style={s.logText}>{item.message}</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
-
-          <View style={s.notice}>
-            <View style={[s.statusDot, { backgroundColor: "#22c55e" }]} />
-            <Text style={s.noticeText}>All systems nominal</Text>
-          </View>
+              );
+            })}
+          </ScrollView>
         </View>
       </View>
     </View>
@@ -141,34 +123,8 @@ const s = StyleSheet.create({
   headerSpacer: { width: 90 },
   title: { color: theme.colors.accentDeep, fontWeight: "900", fontSize: 16, letterSpacing: 0.6 },
   subtitle: { color: "rgba(251,191,36,0.6)", fontSize: 10, marginTop: 2 },
-  tabs: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  tab: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.panelBorderSoft,
-    backgroundColor: "rgba(17,24,39,0.5)",
-  },
-  tabActive: { backgroundColor: "rgba(234,88,12,0.55)", borderColor: theme.colors.accentBorder },
-  tabPressed: { transform: [{ scale: 0.98 }] },
-  tabText: { color: "rgba(251,191,36,0.6)", fontWeight: "800", textAlign: "center", fontSize: 11 },
-  tabTextActive: { color: theme.colors.textPrimary },
-  gridWrap: { flexDirection: "row", flexWrap: "wrap" },
-  card: {
-    backgroundColor: theme.colors.panel,
-    borderRadius: theme.radius.md,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.panelBorder,
-  },
-  cardLabel: { color: "rgba(251,191,36,0.65)", fontSize: 10, marginBottom: 6 },
-  cardValue: { fontWeight: "900", fontSize: 14, marginBottom: 6 },
-  cardStatus: { flexDirection: "row", alignItems: "center", gap: 6 },
-  statusDot: { width: 6, height: 6, borderRadius: 99 },
-  statusText: { color: theme.colors.textMuted, fontSize: 9, letterSpacing: 0.6 },
-  notice: {
-    marginTop: 12,
+  metaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  metaBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -177,8 +133,25 @@ const s = StyleSheet.create({
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.track,
     borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.35)",
-    alignSelf: "flex-start",
+    borderColor: "rgba(34,197,94,0.4)",
   },
-  noticeText: { color: theme.colors.success, fontSize: 10, fontWeight: "800", letterSpacing: 0.6 },
+  statusDot: { width: 6, height: 6, borderRadius: 99 },
+  metaText: { color: theme.colors.success, fontSize: 10, fontWeight: "800", letterSpacing: 0.6 },
+  metaTime: { color: theme.colors.textMuted, fontSize: 10 },
+  logList: { flex: 1 },
+  logContent: { gap: 10, paddingBottom: 12 },
+  logRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  logDot: { width: 8, height: 8, borderRadius: 99, marginTop: 10 },
+  logCard: {
+    flex: 1,
+    backgroundColor: theme.colors.panel,
+    borderRadius: theme.radius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.panelBorder,
+  },
+  logHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  logTime: { color: theme.colors.textAccent, fontSize: 10, letterSpacing: 0.6 },
+  logTone: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
+  logText: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16 },
 });

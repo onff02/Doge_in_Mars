@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, ImageBackground, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import type { RootStackParamList } from "../navigation";
 import { Spaceship } from "../components/Spaceship";
 import { theme } from "../theme";
+import { getAuthToken, getAuthUser } from "../api/client";
 
 const STAR_COUNT = 20;
 const BG_IMAGE =
@@ -48,6 +49,8 @@ function ButtonGradient() {
 
 export default function StartScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [introViewed, setIntroViewed] = useState(false);
   const { width, height } = useWindowDimensions();
   const stars = useMemo(() => createStars(STAR_COUNT), []);
 
@@ -117,6 +120,24 @@ export default function StartScreen() {
   const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
   const hintOpacity = hint.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
 
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      const checkAuth = async () => {
+        const token = await getAuthToken();
+        const user = token ? await getAuthUser() : null;
+        if (isActive) {
+          setIsAuthed(Boolean(token));
+          setIntroViewed(Boolean(user?.introViewed));
+        }
+      };
+      checkAuth();
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
   return (
     <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
@@ -155,28 +176,37 @@ export default function StartScreen() {
             <View style={s.center}>
               <Text style={s.title}>Doge City in Mars</Text>
 
-              <Pressable style={({ pressed }) => [s.button, pressed && s.buttonPressed]} onPress={() => nav.navigate("Intro")}>
-                <ButtonGradient />
-                <View style={s.buttonGlow} pointerEvents="none" />
-                <Animated.View style={[s.buttonPulse, { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} pointerEvents="none" />
-                <View style={s.buttonContent}>
-                  <Text style={s.buttonText}>GAME START</Text>
-                </View>
-              </Pressable>
-
-              <View style={s.authRow}>
-                <Pressable style={({ pressed }) => [s.authButton, pressed && s.authButtonPressed]} onPress={() => nav.navigate("Login")}>
-                  <Text style={s.authButtonText}>LOG IN</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [s.authButton, s.authButtonFilled, pressed && s.authButtonPressed]}
-                  onPress={() => nav.navigate("Signup")}
-                >
-                  <Text style={[s.authButtonText, s.authButtonTextFilled]}>SIGN UP</Text>
-                </Pressable>
-              </View>
-
-              <Animated.Text style={[s.hint, { opacity: hintOpacity }]}>Press to begin your journey</Animated.Text>
+              {isAuthed ? (
+                <>
+                  <Pressable
+                    style={({ pressed }) => [s.button, pressed && s.buttonPressed]}
+                    onPress={() => nav.replace(introViewed ? "RocketSelect" : "Intro")}
+                  >
+                    <ButtonGradient />
+                    <View style={s.buttonGlow} pointerEvents="none" />
+                    <Animated.View style={[s.buttonPulse, { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} pointerEvents="none" />
+                    <View style={s.buttonContent}>
+                      <Text style={s.buttonText}>GAME START</Text>
+                    </View>
+                  </Pressable>
+                  <Animated.Text style={[s.hint, { opacity: hintOpacity }]}>Press to begin your journey</Animated.Text>
+                </>
+              ) : (
+                <>
+                  <View style={s.authRow}>
+                    <Pressable style={({ pressed }) => [s.authButton, pressed && s.authButtonPressed]} onPress={() => nav.navigate("Login")}>
+                      <Text style={s.authButtonText}>LOG IN</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [s.authButton, s.authButtonFilled, pressed && s.authButtonPressed]}
+                      onPress={() => nav.navigate("Signup")}
+                    >
+                      <Text style={[s.authButtonText, s.authButtonTextFilled]}>SIGN UP</Text>
+                    </Pressable>
+                  </View>
+                  <Animated.Text style={[s.hint, { opacity: hintOpacity }]}>Log in to begin your journey</Animated.Text>
+                </>
+              )}
             </View>
           </View>
         </ImageBackground>
