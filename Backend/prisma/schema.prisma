@@ -26,14 +26,16 @@ model User {
 
 // 로켓 스펙 (PER, PBR, ROE 매핑)
 model Rocket {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  category  String   // Growth, Blue-Chip, Dividend
-  boost     Float    // PER 매핑: 가속 폭발력
-  fuelEco   Float    // ROE 매핑: 연비 효율
-  armor     Float    // PBR 매핑: 선체 내구도
-  events    GameEvent[]
-  sessions  FlightSession[]
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?  // 로켓 설명
+  imageUrl    String?  // 로켓 이미지 URL
+  category    String   // Growth, Blue-Chip, Dividend
+  boost       Float    // PER 매핑: 가속 폭발력
+  fuelEco     Float    // ROE 매핑: 연비 효율
+  armor       Float    // PBR 매핑: 선체 내구도
+  events      GameEvent[]
+  sessions    FlightSession[]
 
   @@map("rockets")
 }
@@ -102,10 +104,9 @@ enum InvestingStyle {
 
 // Final 엔딩 Enum
 enum FinalEnding {
-  CRASH               // 0~1개 정답: 화성 도작 실패
-  TENT                // 2~3개 정답: 도지 텐트촌 건설
-  CITY                // 4~5개 정답: 도지 도시 건설
-  INVASION            // 6개 정답: 도지 지구 침공
+  CRASH               // 0~2개 정답: 화성 도착 실패 💥
+  MARS                // 3~5개 정답: 화성 도착 🏙️
+  INVASION            // 6개 정답: 도지 진화 후 지구 침공 🐕→👤
 }
 
 // 항해 세션 (실시간 데이터 동기화용)

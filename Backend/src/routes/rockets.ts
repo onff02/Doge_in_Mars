@@ -21,26 +21,26 @@ export async function rocketRoutes(fastify: FastifyInstance) {
         
         // 원본 스탯 (기업 지표)
         rawStats: {
-          PER: rocket.boostStat,
-          PBR: rocket.armorStat,
-          ROE: rocket.fuelEcoStat,
+          PER: rocket.boost,
+          PBR: rocket.armor,
+          ROE: rocket.fuelEco,
         },
         
         // 게임 스탯 (해석된 값)
         gameStats: {
           boost: {
-            value: rocket.boostStat,
-            rating: getBoostRating(rocket.boostStat),
+            value: rocket.boost,
+            rating: getBoostRating(rocket.boost),
             description: '가속 폭발력 - PER 기반 (낮을수록 강력)',
           },
           armor: {
-            value: rocket.armorStat,
-            rating: getArmorRating(rocket.armorStat),
+            value: rocket.armor,
+            rating: getArmorRating(rocket.armor),
             description: '선체 내구도 - PBR 기반 (낮을수록 단단함)',
           },
           fuelEco: {
-            value: rocket.fuelEcoStat,
-            rating: getFuelEcoRating(rocket.fuelEcoStat),
+            value: rocket.fuelEco,
+            rating: getFuelEcoRating(rocket.fuelEco),
             description: '연비 효율 - ROE 기반 (높을수록 알뜰함)',
           },
         },
@@ -96,22 +96,22 @@ export async function rocketRoutes(fastify: FastifyInstance) {
           description: rocket.description,
           imageUrl: rocket.imageUrl,
           rawStats: {
-            PER: rocket.boostStat,
-            PBR: rocket.armorStat,
-            ROE: rocket.fuelEcoStat,
+            PER: rocket.boost,
+            PBR: rocket.armor,
+            ROE: rocket.fuelEco,
           },
           gameStats: {
             boost: {
-              value: rocket.boostStat,
-              rating: getBoostRating(rocket.boostStat),
+              value: rocket.boost,
+              rating: getBoostRating(rocket.boost),
             },
             armor: {
-              value: rocket.armorStat,
-              rating: getArmorRating(rocket.armorStat),
+              value: rocket.armor,
+              rating: getArmorRating(rocket.armor),
             },
             fuelEco: {
-              value: rocket.fuelEcoStat,
-              rating: getFuelEcoRating(rocket.fuelEcoStat),
+              value: rocket.fuelEco,
+              rating: getFuelEcoRating(rocket.fuelEco),
             },
           },
           recommendedStyle: getRecommendedStyle(rocket),
@@ -154,9 +154,9 @@ function getFuelEcoRating(roe: number): string {
 }
 
 interface RocketData {
-  boostStat: number;
-  armorStat: number;
-  fuelEcoStat: number;
+  boost: number;
+  armor: number;
+  fuelEco: number;
 }
 
 function getRecommendedStyle(rocket: RocketData): {
@@ -165,9 +165,9 @@ function getRecommendedStyle(rocket: RocketData): {
   marketCondition: string;
 } {
   // 가장 뛰어난 스탯 찾기
-  const boostScore = 30 / rocket.boostStat; // PER은 낮을수록 좋음
-  const armorScore = 2 / rocket.armorStat;  // PBR은 낮을수록 좋음
-  const fuelScore = rocket.fuelEcoStat / 20; // ROE는 높을수록 좋음
+  const boostScore = 30 / rocket.boost; // PER은 낮을수록 좋음
+  const armorScore = 2 / rocket.armor;  // PBR은 낮을수록 좋음
+  const fuelScore = rocket.fuelEco / 20; // ROE는 높을수록 좋음
 
   const maxScore = Math.max(boostScore, armorScore, fuelScore);
 

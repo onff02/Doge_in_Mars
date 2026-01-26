@@ -6,9 +6,12 @@ async function main() {
   // 1. 로켓 데이터 초기화 (PER, ROE, PBR 매핑)
   const nvda = await prisma.rocket.upsert({
     where: { name: 'NVDA' },
-    update: {},
+    update: {
+      description: 'NVIDIA - AI/GPU 선두주자. 높은 성장성, 높은 변동성.',
+    },
     create: {
       name: 'NVDA',
+      description: 'NVIDIA - AI/GPU 선두주자. 높은 성장성, 높은 변동성.',
       category: 'Growth',
       boost: 1.8,    // PER 기반: 호재 시 폭발력 상
       fuelEco: 1.2,  // ROE 기반
@@ -18,9 +21,12 @@ async function main() {
 
   const aapl = await prisma.rocket.upsert({
     where: { name: 'AAPL' },
-    update: {},
+    update: {
+      description: 'Apple - 안정적인 블루칩. 균형 잡힌 성능.',
+    },
     create: {
       name: 'AAPL',
+      description: 'Apple - 안정적인 블루칩. 균형 잡힌 성능.',
       category: 'Blue-Chip',
       boost: 1.3,
       fuelEco: 1.8,  // ROE 기반: 에너지 효율 최상
@@ -30,9 +36,12 @@ async function main() {
 
   const ko = await prisma.rocket.upsert({
     where: { name: 'KO' },
-    update: {},
+    update: {
+      description: 'Coca-Cola - 배당주의 왕. 안정성 최고.',
+    },
     create: {
       name: 'KO',
+      description: 'Coca-Cola - 배당주의 왕. 안정성 최고.',
       category: 'Dividend',
       boost: 1.1,
       fuelEco: 1.1,

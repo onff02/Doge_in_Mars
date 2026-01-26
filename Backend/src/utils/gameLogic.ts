@@ -210,8 +210,11 @@ export function calculateEventBasedHullDamage(
 // 정답 판정 및 Final 엔딩 시스템
 // ============================================
 
-// Final 엔딩 타입
-export type FinalEndingType = 'CRASH' | 'TENT' | 'CITY' | 'INVASION';
+// Final 엔딩 타입 (새 기획)
+// 0~2개: CRASH (화성 도착 실패) 💥
+// 3~5개: MARS (화성 도착) 🏙️
+// 6개: INVASION (도지 진화 후 지구 침공) 🐕→👤
+export type FinalEndingType = 'CRASH' | 'MARS' | 'INVASION';
 
 interface ChoiceResult {
   isPositiveEvent: boolean;    // 이벤트가 실제로 긍정적이었는지
@@ -263,49 +266,52 @@ export function judgeUserChoice(
 /**
  * 정답 개수에 따른 Final 엔딩 계산
  * 
- * 0~1개: CRASH (화성 도착 실패)
- * 2~3개: TENT (도지 텐트촌 건설)
- * 4~5개: CITY (도지 도시 건설)
- * 6개: INVASION (도지 지구 침공)
+ * | 정답 개수 | 엔딩 | 설명 |
+ * |----------|------|------|
+ * | 0~2개 | 💥 CRASH | 화성 도착 실패 |
+ * | 3~5개 | 🏙️ MARS | 화성 도착 |
+ * | 6개 | 🐕→👤 INVASION | 화성 도착 후 도지가 진화하여 지구 침공 |
  */
 export function calculateFinalEnding(correctAnswers: number): {
   ending: FinalEndingType;
   title: string;
   description: string;
   videoId: string;
+  dogeVillageBuilt: boolean;
+  potatoPlanting: boolean;
 } {
+  // 6개 정답: INVASION (도지 진화 후 지구 침공)
   if (correctAnswers >= 6) {
     return {
       ending: 'INVASION',
-      title: '🐕→👤 도지 지구 침공',
-      description: '완벽한 항해! 도지들이 진화하여 인간의 형태를 갖추고 지구 침공을 시작합니다...',
+      title: '🐕→👤 INVASION',
+      description: '완벽한 항해! 화성에 착륙하자마자 도지들이 쏟아져 나와 도지마을을 건설하고 화성 감자를 심기 시작했습니다. 그리고... 도지들이 진화하여 인간의 형태를 갖추고 지구 침공을 시작합니다!',
       videoId: 'ending_invasion',
+      dogeVillageBuilt: true,
+      potatoPlanting: true,
     };
   }
   
-  if (correctAnswers >= 4) {
+  // 3~5개 정답: MARS (화성 도착)
+  if (correctAnswers >= 3) {
     return {
-      ending: 'CITY',
-      title: '🏙️ 도지 시티 건설',
-      description: '훌륭한 항해! 화성에 도지들의 번영하는 도시가 건설되었습니다.',
-      videoId: 'ending_city',
+      ending: 'MARS',
+      title: '🏙️ MARS',
+      description: '화성 도착 성공! 착륙과 동시에 함선에서 도지들이 쏟아져 나와 도지마을을 건설하고 화성 감자를 심기 시작했습니다!',
+      videoId: 'ending_mars',
+      dogeVillageBuilt: true,
+      potatoPlanting: true,
     };
   }
   
-  if (correctAnswers >= 2) {
-    return {
-      ending: 'TENT',
-      title: '⛺ 도지 텐트촌 건설',
-      description: '무사히 도착! 자원이 부족하여 텐트촌에서 시작하지만, 희망은 있습니다.',
-      videoId: 'ending_tent',
-    };
-  }
-  
+  // 0~2개 정답: CRASH (화성 도착 실패)
   return {
     ending: 'CRASH',
-    title: '💥 화성 도착 실패',
-    description: '항해에 실패했습니다. 도지들은 우주 미아가 되었습니다...',
+    title: '💥 CRASH',
+    description: '항해에 실패했습니다. 도지들은 우주 미아가 되었습니다... 화성에 도착하지 못해 도지마을은 건설되지 않았습니다.',
     videoId: 'ending_crash',
+    dogeVillageBuilt: false,
+    potatoPlanting: false,
   };
 }
 

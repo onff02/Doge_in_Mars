@@ -503,9 +503,9 @@ export async function flightRoutes(fastify: FastifyInstance) {
             name: session.rocket.name,
             description: session.rocket.description,
             stats: {
-              PER: session.rocket.boostStat,
-              PBR: session.rocket.armorStat,
-              ROE: session.rocket.fuelEcoStat,
+              PER: session.rocket.boost,
+              PBR: session.rocket.armor,
+              ROE: session.rocket.fuelEco,
             },
           },
           
