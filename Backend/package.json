@@ -31,6 +31,7 @@
     "bcrypt": "^5.1.1",
     "dotenv": "^16.4.5",
     "fastify": "^4.26.2",
+    "yahoo-finance2": "^3.13.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

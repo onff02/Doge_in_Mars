@@ -1,7 +1,17 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
+import yahooFinance from 'yahoo-finance2';
 
-// 모의 주식 데이터 생성 (실제로는 외부 API 연동 필요)
+// 1. 라운드별 실제 역사적 경제 사건 시기 설정
+const ROUND_PERIODS: Record<number, { start: string; end: string }> = {
+  1: { start: '2008-09-01', end: '2009-03-31' }, // 리먼 브라더스 사태 (Bear Trap)
+  2: { start: '2018-01-01', end: '2019-01-31' }, // 미중 무역전쟁 및 암호화폐 폭락
+  3: { start: '2020-04-01', end: '2021-12-31' }, // 팬데믹 이후 불장 (Bull Run)
+  4: { start: '2023-01-01', end: '2023-12-31' }, // AI 열풍 및 규제 이슈
+  5: { start: '2022-01-01', end: '2022-10-31' }, // 금리 인상 및 거품 붕괴 (Bubble Burst)
+  6: { start: '2024-01-01', end: '2026-01-26' }, // 현재 안착 구간
+};
+
 interface ChartDataPoint {
   timestamp: number;
   open: number;
@@ -11,68 +21,41 @@ interface ChartDataPoint {
   volume: number;
 }
 
-// 고정 항로 설정 - Dogecoin to Mars!
-const FIXED_ROUTE = {
-  symbol: 'DOGE',
-  basePrice: 0.08,
-  volatility: 0.08,
-  name: 'Dogecoin to Mars',
-  description: '도지코인을 타고 화성으로! 변동성 높은 흥미진진한 항로입니다.',
-};
-
 /**
- * 모의 차트 데이터 생성
- * 실제 프로덕션에서는 Yahoo Finance, Alpha Vantage 등의 API를 사용
+ * Yahoo Finance API를 통해 실기 주가 데이터를 가져옴
  */
-function generateMockChartData(points: number = 100): ChartDataPoint[] {
-  const data: ChartDataPoint[] = [];
+async function getHistoricalChartData(symbol: string, round: number): Promise<ChartDataPoint[]> {
+  const period = ROUND_PERIODS[round] || ROUND_PERIODS[6];
   
-  let currentPrice = FIXED_ROUTE.basePrice;
-  const now = Date.now();
-  const interval = 60000; // 1분 간격
-  
-  for (let i = 0; i < points; i++) {
-    // 랜덤 워크 + 약간의 트렌드
-    const trend = Math.sin(i / 20) * FIXED_ROUTE.volatility * 0.5; // 사인파 트렌드
-    const noise = (Math.random() - 0.5) * FIXED_ROUTE.volatility * 2;
-    const change = 1 + trend + noise;
-    
-    currentPrice *= change;
-    
-    // OHLC 데이터 생성
-    const volatilityFactor = FIXED_ROUTE.volatility * currentPrice;
-    const open = currentPrice * (1 + (Math.random() - 0.5) * 0.01);
-    const close = currentPrice;
-    const high = Math.max(open, close) + Math.random() * volatilityFactor;
-    const low = Math.min(open, close) - Math.random() * volatilityFactor;
-    
-    data.push({
-      timestamp: now - (points - i) * interval,
-      open: Number(open.toFixed(4)),
-      high: Number(high.toFixed(4)),
-      low: Number(low.toFixed(4)),
-      close: Number(close.toFixed(4)),
-      volume: Math.floor(Math.random() * 1000000) + 100000,
+  try {
+    const results = await yahooFinance.historical(symbol, {
+      period1: period.start,
+      period2: period.end,
+      interval: '1d', // 일봉 데이터
     });
     
-    currentPrice = close;
+    return results.map(quote => ({
+      timestamp: new Date(quote.date).getTime(),
+      open: quote.open,
+      high: quote.high,
+      low: quote.low,
+      close: quote.close,
+      volume: quote.volume,
+    }));
+  } catch (error) {
+    console.error(`Yahoo Finance fetch error for ${symbol}:`, error);
+    return [];
   }
-  
-  return data;
 }
 
 /**
- * 중력파 데이터로 변환 (게임용)
+ * 게임용 중력파 데이터로 변환
  */
-function transformToGravityData(chartData: ChartDataPoint[]): {
-  timestamps: number[];
-  values: number[];
-  stability: number[];
-} {
+function transformToGravityData(chartData: ChartDataPoint[]) {
   const timestamps = chartData.map((d) => d.timestamp);
   const values = chartData.map((d) => d.close);
   
-  // 안정도 계산 (전 봉 대비 변화율)
+  // 안정도 계산 (전일 대비 변화율 %)
   const stability = chartData.map((d, i) => {
     if (i === 0) return 0;
     const prevClose = chartData[i - 1].close;
@@ -85,41 +68,47 @@ function transformToGravityData(chartData: ChartDataPoint[]): {
 export async function chartRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/charts
-   * 고정 항로의 중력파 데이터 로드 (DOGE to Mars!)
+   * 라운드와 종목 심볼을 받아 실제 주가 기반 중력파 데이터 반환
    */
   fastify.get('/', async (request: FastifyRequest<{ 
-    Querystring: { points?: string };
+    Querystring: { round?: string; symbol?: string };
   }>, reply: FastifyReply) => {
     try {
-      const points = parseInt(request.query.points || '100', 10);
-      const symbol = FIXED_ROUTE.symbol;
+      const round = parseInt(request.query.round || '1', 10);
+      const symbol = request.query.symbol || 'NVDA';
+      const cacheKey = `CHART_${symbol}_R${round}`;
       
-      // 캐시 확인
+      // 1. 캐시 확인 (Prisma 이용)
       const cached = await prisma.chartDataCache.findUnique({
-        where: { symbol },
+        where: { symbol: cacheKey },
       });
       
       let chartData: ChartDataPoint[];
       
       if (cached && new Date(cached.expiresAt) > new Date()) {
-        // 캐시가 유효하면 사용
         chartData = cached.data as unknown as ChartDataPoint[];
       } else {
-        // 새로운 데이터 생성 (실제로는 외부 API 호출)
-        chartData = generateMockChartData(Math.min(points, 500));
+        // 2. 캐시 없거나 만료 시 Yahoo Finance에서 새로 가져옴
+        chartData = await getHistoricalChartData(symbol, round);
         
-        // 캐시 저장 (5분 TTL)
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        if (chartData.length === 0) {
+          return reply.status(404).send({
+            success: false,
+            error: '데이터를 불러올 수 없습니다. 심볼이나 라운드를 확인하세요.',
+          });
+        }
         
+        // 3. 캐시 저장 (데이터가 과거 기록이므로 24시간 동안 유효)
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         await prisma.chartDataCache.upsert({
-          where: { symbol },
+          where: { symbol: cacheKey },
           update: {
             data: chartData as any,
             fetchedAt: new Date(),
             expiresAt,
           },
           create: {
-            symbol,
+            symbol: cacheKey,
             data: chartData as any,
             expiresAt,
           },
@@ -131,28 +120,19 @@ export async function chartRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: {
-          symbol: FIXED_ROUTE.symbol,
-          name: FIXED_ROUTE.name,
-          description: FIXED_ROUTE.description,
-          
-          // 원본 차트 데이터 (OHLCV)
-          chartData,
-          
-          // 게임용 중력파 데이터
+          symbol,
+          round,
+          chartData, // 원본 OHLCV 데이터
           gravityData: {
             timestamps: gravityData.timestamps,
-            values: gravityData.values,           // y축 값 (주가)
-            stability: gravityData.stability,     // 중력파 안정도 (변화율 %)
+            values: gravityData.values,           // y축 주가
+            stability: gravityData.stability,     // 중력파 안정도
           },
-          
-          // 메타데이터
           meta: {
-            volatility: FIXED_ROUTE.volatility,
-            currentPrice: chartData[chartData.length - 1]?.close,
-            priceChange24h: calculatePriceChange(chartData),
             dataPoints: chartData.length,
-            interval: '1m',
-          },
+            startDate: ROUND_PERIODS[round]?.start,
+            endDate: ROUND_PERIODS[round]?.end,
+          }
         },
       });
     } catch (error) {
@@ -166,56 +146,32 @@ export async function chartRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/charts/live
-   * 실시간 중력파 데이터 (단일 포인트) - 게임 플레이 중 실시간 업데이트용
+   * 실시간 주가 데이터 (게임 플레이 중 업데이트용)
    */
-  fastify.get('/live', async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/live', async (request: FastifyRequest<{
+    Querystring: { symbol?: string };
+  }>, reply: FastifyReply) => {
     try {
-      const symbol = FIXED_ROUTE.symbol;
-      
-      // 실시간 데이터 시뮬레이션
-      const cached = await prisma.chartDataCache.findUnique({
-        where: { symbol },
-      });
-      
-      let lastPrice = FIXED_ROUTE.basePrice;
-      if (cached && Array.isArray(cached.data) && (cached.data as unknown as ChartDataPoint[]).length > 0) {
-        const data = cached.data as unknown as ChartDataPoint[];
-        lastPrice = data[data.length - 1].close;
-      }
-      
-      // 새로운 가격 생성
-      const change = (Math.random() - 0.5) * FIXED_ROUTE.volatility * 2;
-      const newPrice = lastPrice * (1 + change);
-      const changePercent = change * 100;
+      const symbol = request.query.symbol || 'NVDA';
+      const quote = await yahooFinance.quote(symbol);
       
       return reply.send({
         success: true,
         data: {
-          symbol: FIXED_ROUTE.symbol,
+          symbol: symbol,
           timestamp: Date.now(),
-          price: Number(newPrice.toFixed(4)),
-          previousPrice: Number(lastPrice.toFixed(4)),
-          change: Number((newPrice - lastPrice).toFixed(4)),
-          changePercent: Number(changePercent.toFixed(2)),
-          isStable: changePercent >= 0,
-          stabilityLevel: Math.abs(changePercent),
+          price: quote.regularMarketPrice,
+          change: quote.regularMarketChange,
+          changePercent: quote.regularMarketChangePercent,
+          isStable: (quote.regularMarketChangePercent || 0) >= -2, // 임의의 안정도 기준
         },
       });
     } catch (error) {
       console.error('Get live data error:', error);
       return reply.status(500).send({
         success: false,
-        error: '서버 오류가 발생했습니다.',
+        error: '실시간 데이터를 가져오는데 실패했습니다.',
       });
     }
   });
-}
-
-// 헬퍼 함수들
-
-function calculatePriceChange(data: ChartDataPoint[]): number {
-  if (data.length < 2) return 0;
-  const first = data[0].close;
-  const last = data[data.length - 1].close;
-  return Number((((last - first) / first) * 100).toFixed(2));
 }

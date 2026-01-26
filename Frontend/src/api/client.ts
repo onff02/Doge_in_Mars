@@ -198,7 +198,7 @@ export async function loginUser(params: { email: string; password: string }): Pr
 }
 
 export async function markIntroComplete(): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>("/api/flight/intro-complete", { method: "POST", auth: true });
+  return apiRequest<{ message: string }>("/api/flight/intro-complete", { method: "POST", auth: true, body: {} });
 }
 
 export async function getRockets(): Promise<{ rockets: Rocket[] }> {
