@@ -86,7 +86,7 @@ export default function CockpitScreen() {
   const contentTop = Math.max(12, frame.height * 0.16);
   const roundLabel = `ROUND ${round}`;
   const roundCopy = "지금까지의 중력장 안정도 차트와 최신 정보를 바탕으로 연료 소모량을 결정하세요.";
-  const confirmDisabled = isConfirming || leverPosition === "middle";
+  const confirmDisabled = isConfirming;
 
   const updateLeverPosition = useCallback(
     (next: "up" | "middle" | "down") => {
@@ -194,10 +194,6 @@ export default function CockpitScreen() {
 
   const handleConfirm = useCallback(async () => {
     setDecisionError("");
-    if (leverPosition === "middle") {
-      setDecisionError("연료 소모를 위 또는 아래로 선택해주세요.");
-      return;
-    }
     if (chartValues.length < 2) {
       setDecisionError("차트 데이터를 불러오는 중입니다.");
       return;
@@ -219,10 +215,9 @@ export default function CockpitScreen() {
       });
       chartCursor.current = Math.min(index + 1, chartValues.length - 1);
       setLeverPosition("middle");
-      if (round < MAX_ROUNDS) {
-        setRound(round + 1);
-        setView("round");
-      }
+      const nextRound = Math.min(round + 1, MAX_ROUNDS);
+      setRound(nextRound);
+      setView("round");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Sync failed.";
       setDecisionError(message);
@@ -367,17 +362,19 @@ export default function CockpitScreen() {
                 {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
               </Text>
               <Text style={s.leverHint}>Swipe up or down</Text>
-              <Pressable
-                style={({ pressed }) => [
-                  s.confirmButton,
-                  confirmDisabled && s.confirmDisabled,
-                  pressed && !confirmDisabled && s.confirmPressed,
-                ]}
-                onPress={handleConfirm}
-                disabled={confirmDisabled}
-              >
-                <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
-              </Pressable>
+              {leverPosition !== "middle" ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    s.confirmButton,
+                    confirmDisabled && s.confirmDisabled,
+                    pressed && !confirmDisabled && s.confirmPressed,
+                  ]}
+                  onPress={handleConfirm}
+                  disabled={confirmDisabled}
+                >
+                  <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
+                </Pressable>
+              ) : null}
               {decisionError ? <Text style={s.decisionError}>{decisionError}</Text> : null}
             </View>
 

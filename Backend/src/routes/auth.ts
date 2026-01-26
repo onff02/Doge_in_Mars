@@ -18,7 +18,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         required: ['email', 'password', 'nickname'],
         properties: {
           email: { type: 'string', format: 'email', description: '사용자 이메일' },
-          password: { type: 'string', minLength: 8, description: '비밀번호 (8자 이상)' },
+          password: { type: 'string', minLength: 6, description: '비밀번호 (8자 이상)' },
           nickname: { type: 'string', description: '서비스에서 사용할 닉네임' },
         },
       },
