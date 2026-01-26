@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ImageBackground, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
+import { useEventListener } from "expo";
+import { Audio } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
 import type { RootStackParamList } from "../navigation";
 import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
@@ -15,6 +18,38 @@ type Telemetry = {
   progress?: number;
   isStable?: boolean;
   status?: string;
+};
+
+type LeverChoice = "up" | "down";
+type OutcomeKey = "upCorrect" | "upWrong" | "downCorrect" | "downWrong";
+type FinalOutcomeKey = "fail" | "success1" | "success2";
+
+const OUTCOME_VIDEOS = {
+  upCorrect: require("../../assets/videos/upCorrect.mp4"),
+  upWrong: require("../../assets/videos/upWrong.mp4"),
+  downCorrect: require("../../assets/videos/downCorrect.mp4"),
+  downWrong: require("../../assets/videos/downWrong.mp4"),
+} as const;
+
+const FINAL_OUTCOME_VIDEOS = {
+  fail: require("../../assets/videos/fail.mp4"),
+  success1: require("../../assets/videos/success1.mp4"),
+  success2: require("../../assets/videos/success2.mp4"),
+} as const;
+
+const FINAL_MESSAGES: Record<FinalOutcomeKey, string> = {
+  fail: "효율적인 연료 소모에 실패한 도지는 화성 도달에 실패했다.",
+  success1: "효율적인 연료 사용에 성공한 도지는 안전하게 화성에 착륙했다.",
+  success2: "완벽한 연료 사용에 성공한 도지는 화성에서 도지시티 건설에 성공하여 세를 키웠고 지구를 침공했다.",
+};
+
+const ROUND_ANSWERS: Record<number, LeverChoice> = {
+  1: "up",
+  2: "down",
+  3: "up",
+  4: "down",
+  5: "up",
+  6: "down",
 };
 
 const BG_IMAGE =
@@ -31,13 +66,76 @@ function generateGsiData(points: number) {
   return data;
 }
 
+function getOutcomeKey(correct: LeverChoice, chosen: LeverChoice): OutcomeKey {
+  if (correct === "up") {
+    return chosen === "up" ? "upCorrect" : "downWrong";
+  }
+  return chosen === "down" ? "downCorrect" : "upWrong";
+}
+
+function getFinalOutcomeKey(correctCount: number): FinalOutcomeKey {
+  if (correctCount <= 2) return "fail";
+  if (correctCount <= 5) return "success1";
+  return "success2";
+}
+
+function OutcomeVideo({ source, onEnd }: { source: number; onEnd: () => void }) {
+  const [audioReady, setAudioReady] = useState(false);
+  const player = useVideoPlayer(source, (videoPlayer) => {
+    videoPlayer.loop = false;
+    videoPlayer.muted = false;
+    videoPlayer.volume = 1;
+    videoPlayer.audioMixingMode = "doNotMix";
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const configureAudio = async () => {
+      try {
+        await Audio.setIsEnabledAsync(true);
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
+        });
+        if (isMounted) setAudioReady(true);
+      } catch {
+        if (isMounted) setAudioReady(true);
+      }
+    };
+    configureAudio();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (audioReady) {
+      player.play();
+    }
+  }, [audioReady, player]);
+
+  useEventListener(player, "playToEnd", onEnd);
+  useEventListener(player, "availableAudioTracksChange", ({ availableAudioTracks }) => {
+    if (!player.audioTrack && availableAudioTracks.length > 0) {
+      player.audioTrack = availableAudioTracks[0];
+    }
+  });
+
+  return <VideoView player={player} style={s.outcomeVideo} contentFit="cover" nativeControls={false} />;
+}
+
 export default function CockpitScreen() {
   const route = useRoute<RouteProp<RootStackParamList, "Cockpit">>();
   const rocketId = route.params?.rocketId ?? 1;
   const startInRound = route.params?.startInRound ?? false;
   const initialRound = route.params?.round ?? 1;
   const { width, height } = useWindowDimensions();
-  const [view, setView] = useState<"cockpit" | "chart" | "info" | "round">(
+  const [view, setView] = useState<"cockpit" | "chart" | "info" | "round" | "outcome" | "final" | "finalResult">(
     startInRound ? "round" : "cockpit"
   );
   const [round, setRound] = useState(() => Math.min(Math.max(initialRound, 1), MAX_ROUNDS));
@@ -50,6 +148,11 @@ export default function CockpitScreen() {
   const [decisionError, setDecisionError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [outcomeKey, setOutcomeKey] = useState<OutcomeKey | null>(null);
+  const [finalOutcomeKey, setFinalOutcomeKey] = useState<FinalOutcomeKey | null>(null);
+  const [pendingRound, setPendingRound] = useState<number | null>(null);
+  const [pendingFinalKey, setPendingFinalKey] = useState<FinalOutcomeKey | null>(null);
   const chartCursor = useRef(1);
 
   const fallbackData = useMemo(() => generateGsiData(40), []);
@@ -85,8 +188,12 @@ export default function CockpitScreen() {
   const swipeThreshold = 18;
   const contentTop = Math.max(12, frame.height * 0.16);
   const roundLabel = `ROUND ${round}`;
-  const roundCopy = "지금까지의 중력장 안정도 차트와 최신 정보를 바탕으로 연료 소모량을 결정하세요.";
-  const confirmDisabled = isConfirming || leverPosition === "middle";
+  const roundCopy = "중력장 안정도 차트와 최신 정보를 바탕으로 연료 소모량을 결정하세요!";
+  const showRoundCopy = round === 1;
+  const finalScoreLabel = `${correctCount} / ${MAX_ROUNDS}`;
+  const finalMessage = finalOutcomeKey ? FINAL_MESSAGES[finalOutcomeKey] : "";
+  const confirmDisabled = isConfirming;
+  const showConfirm = leverPosition !== "middle";
 
   const updateLeverPosition = useCallback(
     (next: "up" | "middle" | "down") => {
@@ -192,12 +299,27 @@ export default function CockpitScreen() {
     };
   }, [rocketId, symbol]);
 
-  const handleConfirm = useCallback(async () => {
-    setDecisionError("");
-    if (leverPosition === "middle") {
-      setDecisionError("연료 소모를 위 또는 아래로 선택해주세요.");
+  const handleOutcomeEnd = useCallback(() => {
+    if (pendingFinalKey) {
+      setFinalOutcomeKey(pendingFinalKey);
+      setPendingFinalKey(null);
+      setOutcomeKey(null);
+      setPendingRound(null);
+      setView("final");
       return;
     }
+    setOutcomeKey(null);
+    setRound((prev) => (pendingRound ?? prev));
+    setPendingRound(null);
+    setView("round");
+  }, [pendingFinalKey, pendingRound]);
+
+  const handleFinalEnd = useCallback(() => {
+    setView("finalResult");
+  }, []);
+
+  const handleConfirm = useCallback(async () => {
+    setDecisionError("");
     if (chartValues.length < 2) {
       setDecisionError("차트 데이터를 불러오는 중입니다.");
       return;
@@ -205,7 +327,20 @@ export default function CockpitScreen() {
 
     setIsConfirming(true);
     try {
-      const fuelInput = leverPosition === "up" ? 80 : 20;
+      const status = await getFlightStatus();
+      if (!status.activeSession) {
+        const start = await startFlight({ rocketId, symbol });
+        const progress = (start.session.distance / start.session.targetDistance) * 100;
+        setSymbol(start.session.symbol || symbol);
+        setTelemetry({
+          fuel: start.session.currentFuel,
+          hull: start.session.currentHull,
+          progress,
+        });
+      }
+
+      const chosenDirection: LeverChoice = leverPosition === "up" ? "up" : "down";
+      const fuelInput = chosenDirection === "up" ? 80 : 20;
       const index = Math.min(chartCursor.current, chartValues.length - 1);
       const yValue = chartValues[index];
       const previousYValue = chartValues[index - 1] ?? yValue;
@@ -219,17 +354,26 @@ export default function CockpitScreen() {
       });
       chartCursor.current = Math.min(index + 1, chartValues.length - 1);
       setLeverPosition("middle");
-      if (round < MAX_ROUNDS) {
-        setRound(round + 1);
-        setView("round");
+      const nextRound = Math.min(round + 1, MAX_ROUNDS);
+      const correctDirection = ROUND_ANSWERS[round] ?? "up";
+      const isCorrect = chosenDirection === correctDirection;
+      const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
+      setCorrectCount(nextCorrectCount);
+      const outcome = getOutcomeKey(correctDirection, chosenDirection);
+      setPendingRound(nextRound);
+      setOutcomeKey(outcome);
+      if (round >= MAX_ROUNDS) {
+        const finalKey = getFinalOutcomeKey(nextCorrectCount);
+        setPendingFinalKey(finalKey);
       }
+      setView("outcome");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Sync failed.";
       setDecisionError(message);
     } finally {
       setIsConfirming(false);
     }
-  }, [chartValues, leverPosition, round]);
+  }, [chartValues, correctCount, leverPosition, round, rocketId, symbol]);
 
   const latestChange = stabilityValues[stabilityValues.length - 1] ?? 0;
   const stableSignal = telemetry.isStable ?? latestChange >= 0;
@@ -295,6 +439,45 @@ export default function CockpitScreen() {
     return <InfoScreen rocketId={rocketId} onBack={() => setView("cockpit")} updates={updates} />;
   }
 
+  if (view === "outcome" && outcomeKey) {
+    return (
+      <View style={s.root}>
+        <View style={[s.frame, { width: frame.width, height: frame.height }]}>
+          <OutcomeVideo source={OUTCOME_VIDEOS[outcomeKey]} onEnd={handleOutcomeEnd} />
+          <View style={s.outcomeOverlay} pointerEvents="none" />
+        </View>
+      </View>
+    );
+  }
+
+  if (view === "final" && finalOutcomeKey) {
+    return (
+      <View style={s.root}>
+        <View style={[s.frame, { width: frame.width, height: frame.height }]}>
+          <OutcomeVideo source={FINAL_OUTCOME_VIDEOS[finalOutcomeKey]} onEnd={handleFinalEnd} />
+          <View style={s.outcomeOverlay} pointerEvents="none" />
+        </View>
+      </View>
+    );
+  }
+
+  if (view === "finalResult" && finalOutcomeKey) {
+    return (
+      <View style={s.root}>
+        <View style={[s.frame, { width: frame.width, height: frame.height }]}>
+          {windowLayer}
+          <View style={s.finalContent}>
+            <View style={s.finalCard}>
+              <Text style={s.finalTitle}>RESULT</Text>
+              <Text style={s.finalScore}>{finalScoreLabel}</Text>
+              <Text style={s.finalMessage}>{finalMessage}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (view === "round") {
     return (
       <View style={s.root}>
@@ -303,8 +486,7 @@ export default function CockpitScreen() {
           <View style={s.roundContent}>
             <View style={s.roundCard}>
               <Text style={s.roundEyebrow}>{roundLabel}</Text>
-              <Text style={s.roundTitle}>Fuel Decision Brief</Text>
-              <Text style={s.roundCopy}>{roundCopy}</Text>
+              {showRoundCopy ? <Text style={s.roundCopy}>{roundCopy}</Text> : null}
               <Pressable style={({ pressed }) => [s.roundButton, pressed && s.roundButtonPressed]} onPress={() => setView("cockpit")}>
                 <Text style={s.roundButtonText}>GO!</Text>
               </Pressable>
@@ -367,17 +549,21 @@ export default function CockpitScreen() {
                 {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
               </Text>
               <Text style={s.leverHint}>Swipe up or down</Text>
-              <Pressable
-                style={({ pressed }) => [
-                  s.confirmButton,
-                  confirmDisabled && s.confirmDisabled,
-                  pressed && !confirmDisabled && s.confirmPressed,
-                ]}
-                onPress={handleConfirm}
-                disabled={confirmDisabled}
-              >
-                <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
-              </Pressable>
+              {showConfirm ? (
+                <View style={s.confirmDock}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      s.confirmButton,
+                      confirmDisabled && s.confirmDisabled,
+                      pressed && !confirmDisabled && s.confirmPressed,
+                    ]}
+                    onPress={handleConfirm}
+                    disabled={confirmDisabled}
+                  >
+                    <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {decisionError ? <Text style={s.decisionError}>{decisionError}</Text> : null}
             </View>
 
@@ -422,6 +608,8 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.2)",
   },
+  outcomeVideo: { ...StyleSheet.absoluteFillObject },
+  outcomeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.25)" },
   window: { ...StyleSheet.absoluteFillObject },
   windowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
   glassSheen: {
@@ -467,6 +655,7 @@ const s = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: 18, paddingBottom: 18, justifyContent: "flex-end" },
   panelRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 14 },
   roundContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  finalContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   roundCard: {
     width: "80%",
     maxWidth: 420,
@@ -478,9 +667,23 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.35)",
     alignItems: "center",
   },
-  roundEyebrow: { color: theme.colors.accent, fontWeight: "800", fontSize: 12, letterSpacing: 1, marginBottom: 6 },
-  roundTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 18, marginBottom: 8 },
-  roundCopy: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 18, textAlign: "center", marginBottom: 16 },
+  finalCard: {
+    width: "82%",
+    maxWidth: 460,
+    backgroundColor: "rgba(12,17,29,0.8)",
+    borderRadius: theme.radius.lg,
+    paddingVertical: 22,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.4)",
+    alignItems: "center",
+  },
+  roundEyebrow: { color: theme.colors.accent, fontWeight: "800", fontSize: 18, letterSpacing: 1, marginBottom: 8 },
+  roundTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 20, marginBottom: 8 },
+  roundCopy: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center", marginBottom: 16 },
+  finalTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 16, letterSpacing: 1, marginBottom: 8 },
+  finalScore: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 26, letterSpacing: 1, marginBottom: 10 },
+  finalMessage: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center" },
   roundButton: {
     paddingVertical: 10,
     paddingHorizontal: 26,
@@ -499,22 +702,23 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.3)",
   },
   panelPressed: { transform: [{ scale: 0.98 }] },
-  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 11, letterSpacing: 0.8, marginBottom: 8 },
+  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 13, letterSpacing: 0.8, marginBottom: 8 },
   chartWindow: { borderRadius: theme.radius.md, padding: 6, backgroundColor: "rgba(0,0,0,0.35)" },
   panelMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
-  panelMetaText: { color: theme.colors.textMuted, fontSize: 10 },
-  errorText: { color: theme.colors.danger, fontSize: 9, marginTop: 6 },
-  panelHint: { color: theme.colors.textHint, fontSize: 9, marginTop: "auto", letterSpacing: 0.4 },
+  panelMetaText: { color: theme.colors.textMuted, fontSize: 11 },
+  errorText: { color: theme.colors.danger, fontSize: 10, marginTop: 6 },
+  panelHint: { color: theme.colors.textHint, fontSize: 10, marginTop: "auto", letterSpacing: 0.4 },
   leverPanel: {
     backgroundColor: "rgba(10,14,22,0.78)",
     borderRadius: theme.radius.lg,
     padding: 12,
+    paddingBottom: 54,
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.35)",
     alignItems: "center",
   },
-  roundBadge: { color: theme.colors.textAccentStrong, fontSize: 10, letterSpacing: 0.8, marginBottom: 6 },
+  roundBadge: { color: theme.colors.textAccentStrong, fontSize: 12, letterSpacing: 0.8, marginBottom: 6 },
   leverWell: { width: 86, alignItems: "center", justifyContent: "center", position: "relative", marginTop: 4 },
   leverTrack: {
     position: "absolute",
@@ -561,10 +765,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.3)",
   },
-  leverState: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 10, letterSpacing: 0.7 },
-  leverHint: { marginTop: 4, color: theme.colors.textHint, fontSize: 9 },
+  leverState: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 12, letterSpacing: 0.7 },
+  leverHint: { marginTop: 4, color: theme.colors.textHint, fontSize: 10 },
+  confirmDock: { position: "absolute", left: 0, right: 0, bottom: 12, alignItems: "center" },
   confirmButton: {
-    marginTop: 10,
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: theme.radius.pill,
@@ -574,12 +778,12 @@ const s = StyleSheet.create({
   },
   confirmPressed: { transform: [{ scale: 0.98 }] },
   confirmDisabled: { opacity: 0.4 },
-  confirmText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 11, letterSpacing: 0.8 },
-  decisionError: { marginTop: 6, color: theme.colors.warning, fontSize: 9, textAlign: "center" },
+  confirmText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 0.8 },
+  decisionError: { marginTop: 6, color: theme.colors.warning, fontSize: 10, textAlign: "center" },
   updateList: { gap: 10, marginTop: 4 },
   updateRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
   updateDot: { width: 6, height: 6, borderRadius: 999, marginTop: 6 },
   updateCopy: { flex: 1 },
-  updateTime: { color: theme.colors.textAccent, fontSize: 9, marginBottom: 2 },
-  updateText: { color: theme.colors.textMuted, fontSize: 10, lineHeight: 14 },
+  updateTime: { color: theme.colors.textAccent, fontSize: 10, marginBottom: 2 },
+  updateText: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16 },
 });

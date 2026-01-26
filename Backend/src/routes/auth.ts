@@ -17,9 +17,15 @@ export async function authRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['email', 'password', 'nickname'],
         properties: {
+<<<<<<< HEAD
           email: { type: 'string', format: 'email', description: 'user email' },
           password: { type: 'string', minLength: 6, description: 'password (at least 6 characters)' },
           nickname: { type: 'string', description: 'nickname to use in the service' },
+=======
+          email: { type: 'string', format: 'email', description: '사용자 이메일' },
+          password: { type: 'string', minLength: 6, description: '비밀번호 (6자 이상)' },
+          nickname: { type: 'string', description: '서비스에서 사용할 닉네임' },
+>>>>>>> 5669312b9864ddcc490e1abf9c6b7f52343c1aa8
         },
       },
       response: {

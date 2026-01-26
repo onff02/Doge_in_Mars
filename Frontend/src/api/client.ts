@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export const API_BASE_URL = "http://43.202.45.31:3000";
 export const AUTH_TOKEN_KEY = "auth_token";
 export const AUTH_USER_KEY = "auth_user";
+export const API_DIAGNOSTICS_KEY = "api_diagnostics";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -139,6 +140,10 @@ export async function clearAuthSession(): Promise<void> {
   await AsyncStorage.removeItem(AUTH_USER_KEY);
 }
 
+export async function getApiDiagnostics(): Promise<string | null> {
+  return AsyncStorage.getItem(API_DIAGNOSTICS_KEY);
+}
+
 async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { method = "GET", body, auth = false } = options;
   const headers: Record<string, string> = {
@@ -152,13 +157,22 @@ async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Pro
     }
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const url = `${API_BASE_URL}${path}`;
+  const response = await fetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
   const text = await response.text();
+  const diagnosticEntry = [
+    new Date().toISOString(),
+    `${method} ${url}`,
+    `status ${response.status}`,
+    text ? `body ${text.slice(0, 200)}` : "body <empty>",
+  ].join(" | ");
+  console.log("[API]", diagnosticEntry);
+  AsyncStorage.setItem(API_DIAGNOSTICS_KEY, diagnosticEntry).catch(() => {});
   let json: ApiEnvelope<T> | null = null;
   if (text) {
     try {
@@ -170,6 +184,13 @@ async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Pro
 
   if (!response.ok) {
     const message = json?.error || json?.message || response.statusText || "Request failed";
+    console.error("[API ERROR]", {
+      url,
+      status: response.status,
+      statusText: response.statusText,
+      body: text,
+      parsed: json,
+    });
     throw new Error(message);
   }
 
@@ -207,7 +228,7 @@ export async function getRockets(): Promise<{ rockets: Rocket[] }> {
 
 export async function getChart(symbol: string, points = 120): Promise<ChartResponse> {
   const query = `?points=${encodeURIComponent(points)}`;
-  return apiRequest<ChartResponse>(`/api/charts/${encodeURIComponent(symbol)}${query}`);
+  return apiRequest<ChartResponse>(`/api/charts${query}`);
 }
 
 export async function getFlightStatus(): Promise<FlightStatusResponse> {
