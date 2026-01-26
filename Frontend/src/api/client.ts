@@ -219,7 +219,7 @@ export async function loginUser(params: { email: string; password: string }): Pr
 }
 
 export async function markIntroComplete(): Promise<{ message: string }> {
-  return apiRequest<{ message: string }>("/api/flight/intro-complete", { method: "POST", auth: true });
+  return apiRequest<{ message: string }>("/api/flight/intro-complete", { method: "POST", auth: true, body: {} });
 }
 
 export async function getRockets(): Promise<{ rockets: Rocket[] }> {
@@ -228,7 +228,7 @@ export async function getRockets(): Promise<{ rockets: Rocket[] }> {
 
 export async function getChart(symbol: string, points = 120): Promise<ChartResponse> {
   const query = `?points=${encodeURIComponent(points)}`;
-  return apiRequest<ChartResponse>(`/api/charts/${encodeURIComponent(symbol)}${query}`);
+  return apiRequest<ChartResponse>(`/api/charts${query}`);
 }
 
 export async function getFlightStatus(): Promise<FlightStatusResponse> {

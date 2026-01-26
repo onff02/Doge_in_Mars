@@ -85,8 +85,10 @@ export default function CockpitScreen() {
   const swipeThreshold = 18;
   const contentTop = Math.max(12, frame.height * 0.16);
   const roundLabel = `ROUND ${round}`;
-  const roundCopy = "지금까지의 중력장 안정도 차트와 최신 정보를 바탕으로 연료 소모량을 결정하세요.";
+  const roundCopy = "중력장 안정도 차트와 최신 정보를 바탕으로 연료 소모량을 결정하세요!";
+  const showRoundCopy = round === 1;
   const confirmDisabled = isConfirming;
+  const showConfirm = leverPosition !== "middle";
 
   const updateLeverPosition = useCallback(
     (next: "up" | "middle" | "down") => {
@@ -298,8 +300,7 @@ export default function CockpitScreen() {
           <View style={s.roundContent}>
             <View style={s.roundCard}>
               <Text style={s.roundEyebrow}>{roundLabel}</Text>
-              <Text style={s.roundTitle}>Fuel Decision Brief</Text>
-              <Text style={s.roundCopy}>{roundCopy}</Text>
+              {showRoundCopy ? <Text style={s.roundCopy}>{roundCopy}</Text> : null}
               <Pressable style={({ pressed }) => [s.roundButton, pressed && s.roundButtonPressed]} onPress={() => setView("cockpit")}>
                 <Text style={s.roundButtonText}>GO!</Text>
               </Pressable>
@@ -362,18 +363,20 @@ export default function CockpitScreen() {
                 {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
               </Text>
               <Text style={s.leverHint}>Swipe up or down</Text>
-              {leverPosition !== "middle" ? (
-                <Pressable
-                  style={({ pressed }) => [
-                    s.confirmButton,
-                    confirmDisabled && s.confirmDisabled,
-                    pressed && !confirmDisabled && s.confirmPressed,
-                  ]}
-                  onPress={handleConfirm}
-                  disabled={confirmDisabled}
-                >
-                  <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
-                </Pressable>
+              {showConfirm ? (
+                <View style={s.confirmDock}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      s.confirmButton,
+                      confirmDisabled && s.confirmDisabled,
+                      pressed && !confirmDisabled && s.confirmPressed,
+                    ]}
+                    onPress={handleConfirm}
+                    disabled={confirmDisabled}
+                  >
+                    <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
+                  </Pressable>
+                </View>
               ) : null}
               {decisionError ? <Text style={s.decisionError}>{decisionError}</Text> : null}
             </View>
@@ -475,9 +478,9 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.35)",
     alignItems: "center",
   },
-  roundEyebrow: { color: theme.colors.accent, fontWeight: "800", fontSize: 12, letterSpacing: 1, marginBottom: 6 },
-  roundTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 18, marginBottom: 8 },
-  roundCopy: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 18, textAlign: "center", marginBottom: 16 },
+  roundEyebrow: { color: theme.colors.accent, fontWeight: "800", fontSize: 18, letterSpacing: 1, marginBottom: 8 },
+  roundTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 20, marginBottom: 8 },
+  roundCopy: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center", marginBottom: 16 },
   roundButton: {
     paddingVertical: 10,
     paddingHorizontal: 26,
@@ -496,22 +499,23 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.3)",
   },
   panelPressed: { transform: [{ scale: 0.98 }] },
-  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 11, letterSpacing: 0.8, marginBottom: 8 },
+  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 13, letterSpacing: 0.8, marginBottom: 8 },
   chartWindow: { borderRadius: theme.radius.md, padding: 6, backgroundColor: "rgba(0,0,0,0.35)" },
   panelMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
-  panelMetaText: { color: theme.colors.textMuted, fontSize: 10 },
-  errorText: { color: theme.colors.danger, fontSize: 9, marginTop: 6 },
-  panelHint: { color: theme.colors.textHint, fontSize: 9, marginTop: "auto", letterSpacing: 0.4 },
+  panelMetaText: { color: theme.colors.textMuted, fontSize: 11 },
+  errorText: { color: theme.colors.danger, fontSize: 10, marginTop: 6 },
+  panelHint: { color: theme.colors.textHint, fontSize: 10, marginTop: "auto", letterSpacing: 0.4 },
   leverPanel: {
     backgroundColor: "rgba(10,14,22,0.78)",
     borderRadius: theme.radius.lg,
     padding: 12,
+    paddingBottom: 54,
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.35)",
     alignItems: "center",
   },
-  roundBadge: { color: theme.colors.textAccentStrong, fontSize: 10, letterSpacing: 0.8, marginBottom: 6 },
+  roundBadge: { color: theme.colors.textAccentStrong, fontSize: 12, letterSpacing: 0.8, marginBottom: 6 },
   leverWell: { width: 86, alignItems: "center", justifyContent: "center", position: "relative", marginTop: 4 },
   leverTrack: {
     position: "absolute",
@@ -558,10 +562,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.3)",
   },
-  leverState: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 10, letterSpacing: 0.7 },
-  leverHint: { marginTop: 4, color: theme.colors.textHint, fontSize: 9 },
+  leverState: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 12, letterSpacing: 0.7 },
+  leverHint: { marginTop: 4, color: theme.colors.textHint, fontSize: 10 },
+  confirmDock: { position: "absolute", left: 0, right: 0, bottom: 12, alignItems: "center" },
   confirmButton: {
-    marginTop: 10,
     paddingVertical: 8,
     paddingHorizontal: 18,
     borderRadius: theme.radius.pill,
@@ -571,12 +575,12 @@ const s = StyleSheet.create({
   },
   confirmPressed: { transform: [{ scale: 0.98 }] },
   confirmDisabled: { opacity: 0.4 },
-  confirmText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 11, letterSpacing: 0.8 },
-  decisionError: { marginTop: 6, color: theme.colors.warning, fontSize: 9, textAlign: "center" },
+  confirmText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 0.8 },
+  decisionError: { marginTop: 6, color: theme.colors.warning, fontSize: 10, textAlign: "center" },
   updateList: { gap: 10, marginTop: 4 },
   updateRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
   updateDot: { width: 6, height: 6, borderRadius: 999, marginTop: 6 },
   updateCopy: { flex: 1 },
-  updateTime: { color: theme.colors.textAccent, fontSize: 9, marginBottom: 2 },
-  updateText: { color: theme.colors.textMuted, fontSize: 10, lineHeight: 14 },
+  updateTime: { color: theme.colors.textAccent, fontSize: 10, marginBottom: 2 },
+  updateText: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16 },
 });

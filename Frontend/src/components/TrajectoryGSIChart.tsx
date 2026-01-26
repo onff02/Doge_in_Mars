@@ -22,7 +22,7 @@ export default function TrajectoryGSIChart({ data, width = 320, height = 180 }: 
   return (
     <View style={{ borderRadius: 14, overflow: "hidden" }}>
       <Canvas style={{ width, height }}>
-        <Path path={path} style="stroke" strokeWidth={3} />
+        <Path path={path} style="stroke" strokeWidth={3} color="#fde047" />
       </Canvas>
     </View>
   );
