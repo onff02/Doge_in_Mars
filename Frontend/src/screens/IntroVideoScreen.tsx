@@ -12,7 +12,7 @@ import { markIntroComplete } from "../api/client";
 export default function IntroVideoScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [audioReady, setAudioReady] = useState(false);
-  const player = useVideoPlayer(require("../../assets/videos/output.mp4"), (videoPlayer) => {
+  const player = useVideoPlayer(require("../../assets/videos/intro.mp4"), (videoPlayer) => {
     videoPlayer.loop = false;
     videoPlayer.muted = false;
     videoPlayer.volume = 1;
