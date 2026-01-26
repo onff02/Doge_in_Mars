@@ -272,7 +272,7 @@ export default function CockpitScreen() {
           }
         }
 
-        const chart = await getChart(activeSymbol, 120);
+        const chart = await getChart(activeSymbol, round);
         if (isMounted) {
           setChartValues(chart.gravityData.values);
           setStabilityValues(chart.gravityData.stability);
@@ -297,7 +297,7 @@ export default function CockpitScreen() {
     return () => {
       isMounted = false;
     };
-  }, [rocketId, symbol]);
+  }, [rocketId, symbol, round]);
 
   const handleOutcomeEnd = useCallback(() => {
     if (pendingFinalKey) {

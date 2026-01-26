@@ -1,16 +1,56 @@
-import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import { theme } from "../theme";
+import { getChart } from "../api/client";
 
 interface ChartScreenProps {
   onBack: () => void;
-  data: number[];
+  round?: number;    // 현재 라운드 (기본값 1)
+  symbol?: string;   // 로켓 종목 심볼 (기본값 NVDA)
 }
 
-export default function ChartScreen({ onBack, data }: ChartScreenProps) {
+export default function ChartScreen({ 
+  onBack, 
+  round = 1, 
+  symbol = "NVDA" 
+}: ChartScreenProps) {
   const { width, height } = useWindowDimensions();
+  
+  // 상태 관리: 로딩 여부 및 중력파 데이터
+  const [loading, setLoading] = useState(true);
+  const [chartData, setChartData] = useState<number[]>([]);
+  const [stabilityStatus, setStabilityStatus] = useState("STABLE");
 
+  // 1. API 데이터 페칭
+  useEffect(() => {
+    const fetchGravityData = async () => {
+      try {
+        setLoading(true);
+        // 백엔드 /api/charts 엔드포인트 호출
+        const response = await getChart(symbol, round);
+        
+        if (response.gravityData) {
+          setChartData(response.gravityData.values);
+        }
+      } catch (error) {
+        console.error("중력파 데이터를 불러오는 중 오류 발생:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGravityData();
+  }, [round, symbol]);
+
+  // 2. 프레임 레이아웃 계산 (제공해주신 로직 유지)
   const frame = useMemo(() => {
     const targetRatio = 932 / 430;
     const padding = 24;
@@ -43,26 +83,46 @@ export default function ChartScreen({ onBack, data }: ChartScreenProps) {
 
         <View style={s.content}>
           <View style={s.header}>
-            <Pressable style={({ pressed }) => [s.backButton, pressed && s.backPressed]} onPress={onBack}>
+            <Pressable 
+              style={({ pressed }) => [s.backButton, pressed && s.backPressed]} 
+              onPress={onBack}
+            >
               <Text style={s.backText}>{"< BACK TO COCKPIT"}</Text>
             </Pressable>
             <View style={s.headerCenter}>
               <Text style={s.title}>GRAVITY WAVE ANALYSIS</Text>
-              <Text style={s.subtitle}>Real-time monitoring</Text>
+              <Text style={s.subtitle}>{symbol} - Round {round} Monitoring</Text>
             </View>
             <View style={s.headerSpacer} />
           </View>
 
           <View style={s.chartCard}>
-            <TrajectoryGSIChart data={data} width={chartWidth} height={chartHeight} />
+            {loading ? (
+              <ActivityIndicator size="large" color={theme.colors.accent} />
+            ) : chartData.length > 0 ? (
+              <TrajectoryGSIChart data={chartData} width={chartWidth} height={chartHeight} />
+            ) : (
+              <Text style={{ color: theme.colors.textAccent }}>데이터를 찾을 수 없습니다.</Text>
+            )}
           </View>
 
           <View style={s.footer}>
-            <View style={s.footerBadge}>
-              <View style={[s.statusDot, { backgroundColor: "#22c55e" }]} />
-              <Text style={s.footerText}>STATUS: STABLE</Text>
+            <View style={[
+              s.footerBadge, 
+              { borderColor: stabilityStatus === "STABLE" ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)" }
+            ]}>
+              <View style={[
+                s.statusDot, 
+                { backgroundColor: stabilityStatus === "STABLE" ? "#22c55e" : "#ef4444" }
+              ]} />
+              <Text style={[
+                s.footerText, 
+                { color: stabilityStatus === "STABLE" ? theme.colors.success : "#ef4444" }
+              ]}>
+                STATUS: {stabilityStatus}
+              </Text>
             </View>
-            <Text style={s.footerMeta}>Update: 1s</Text>
+            <Text style={s.footerMeta}>Update: Historical Sync</Text>
           </View>
         </View>
       </View>
@@ -106,9 +166,8 @@ const s = StyleSheet.create({
     borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.track,
     borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.4)",
   },
   statusDot: { width: 6, height: 6, borderRadius: 99 },
-  footerText: { color: theme.colors.success, fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
+  footerText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
   footerMeta: { color: theme.colors.textAccent, fontSize: 10 },
 });

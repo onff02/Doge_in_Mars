@@ -3,13 +3,21 @@ import prisma from '../lib/prisma.js';
 import yahooFinance from 'yahoo-finance2';
 
 // 1. 라운드별 실제 역사적 경제 사건 시기 설정
-const ROUND_PERIODS: Record<number, { start: string; end: string }> = {
-  1: { start: '2008-09-01', end: '2009-03-31' }, // 리먼 브라더스 사태 (Bear Trap)
-  2: { start: '2018-01-01', end: '2019-01-31' }, // 미중 무역전쟁 및 암호화폐 폭락
-  3: { start: '2020-04-01', end: '2021-12-31' }, // 팬데믹 이후 불장 (Bull Run)
-  4: { start: '2023-01-01', end: '2023-12-31' }, // AI 열풍 및 규제 이슈
-  5: { start: '2022-01-01', end: '2022-10-31' }, // 금리 인상 및 거품 붕괴 (Bubble Burst)
-  6: { start: '2024-01-01', end: '2026-01-26' }, // 현재 안착 구간
+const ROUND_PERIODS: Record<number, { start: string; end: string; trend: 'bull' | 'bear' | 'volatile' }> = {
+  1: { start: '2008-09-01', end: '2009-03-31', trend: 'bear' },     // 리먼 브라더스 사태 (Bear Trap)
+  2: { start: '2018-01-01', end: '2019-01-31', trend: 'volatile' }, // 미중 무역전쟁 및 암호화폐 폭락
+  3: { start: '2020-04-01', end: '2021-12-31', trend: 'bull' },     // 팬데믹 이후 불장 (Bull Run)
+  4: { start: '2023-01-01', end: '2023-12-31', trend: 'bull' },     // AI 열풍 및 규제 이슈
+  5: { start: '2022-01-01', end: '2022-10-31', trend: 'bear' },     // 금리 인상 및 거품 붕괴 (Bubble Burst)
+  6: { start: '2024-01-01', end: '2026-01-26', trend: 'volatile' }, // 현재 안착 구간
+};
+
+// 심볼별 기본 가격 설정
+const SYMBOL_BASE_PRICES: Record<string, number> = {
+  'NVDA': 150,
+  'AAPL': 180,
+  'KO': 60,
+  'DOGE': 0.08,
 };
 
 interface ChartDataPoint {
@@ -19,6 +27,53 @@ interface ChartDataPoint {
   low: number;
   close: number;
   volume: number;
+}
+
+/**
+ * 모의 차트 데이터 생성 (Yahoo Finance 실패 시 fallback)
+ */
+function generateMockChartData(symbol: string, round: number, points: number = 120): ChartDataPoint[] {
+  const data: ChartDataPoint[] = [];
+  const period = ROUND_PERIODS[round] || ROUND_PERIODS[1];
+  const basePrice = SYMBOL_BASE_PRICES[symbol] || 100;
+  
+  let currentPrice = basePrice;
+  const now = Date.now();
+  const interval = 24 * 60 * 60 * 1000; // 1일 간격
+  
+  // 트렌드에 따른 변동성 설정
+  const trendMultiplier = period.trend === 'bull' ? 0.015 : period.trend === 'bear' ? -0.01 : 0;
+  const volatility = period.trend === 'volatile' ? 0.04 : 0.025;
+  
+  for (let i = 0; i < points; i++) {
+    // 트렌드 + 랜덤 노이즈
+    const trend = trendMultiplier;
+    const noise = (Math.random() - 0.5) * volatility * 2;
+    const change = 1 + trend + noise;
+    
+    currentPrice *= change;
+    currentPrice = Math.max(currentPrice, basePrice * 0.3); // 최소 30%
+    
+    // OHLC 데이터 생성
+    const volatilityFactor = currentPrice * 0.02;
+    const open = currentPrice * (1 + (Math.random() - 0.5) * 0.01);
+    const close = currentPrice;
+    const high = Math.max(open, close) + Math.random() * volatilityFactor;
+    const low = Math.min(open, close) - Math.random() * volatilityFactor;
+    
+    data.push({
+      timestamp: now - (points - i) * interval,
+      open: Number(open.toFixed(2)),
+      high: Number(high.toFixed(2)),
+      low: Number(low.toFixed(2)),
+      close: Number(close.toFixed(2)),
+      volume: Math.floor(Math.random() * 10000000) + 1000000,
+    });
+    
+    currentPrice = close;
+  }
+  
+  return data;
 }
 
 /**
@@ -91,11 +146,10 @@ export async function chartRoutes(fastify: FastifyInstance) {
         // 2. 캐시 없거나 만료 시 Yahoo Finance에서 새로 가져옴
         chartData = await getHistoricalChartData(symbol, round);
         
+        // Yahoo Finance 실패 시 모의 데이터 사용 (fallback)
         if (chartData.length === 0) {
-          return reply.status(404).send({
-            success: false,
-            error: '데이터를 불러올 수 없습니다. 심볼이나 라운드를 확인하세요.',
-          });
+          console.log(`Yahoo Finance failed for ${symbol}, using mock data for round ${round}`);
+          chartData = generateMockChartData(symbol, round, 120);
         }
         
         // 3. 캐시 저장 (데이터가 과거 기록이므로 24시간 동안 유효)

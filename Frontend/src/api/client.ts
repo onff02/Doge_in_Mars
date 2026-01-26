@@ -226,8 +226,8 @@ export async function getRockets(): Promise<{ rockets: Rocket[] }> {
   return apiRequest<{ rockets: Rocket[] }>("/api/rockets");
 }
 
-export async function getChart(symbol: string, points = 120): Promise<ChartResponse> {
-  const query = `?points=${encodeURIComponent(points)}`;
+export async function getChart(symbol: string, round = 1): Promise<ChartResponse> {
+  const query = `?symbol=${encodeURIComponent(symbol)}&round=${encodeURIComponent(round)}`;
   return apiRequest<ChartResponse>(`/api/charts${query}`);
 }
 
