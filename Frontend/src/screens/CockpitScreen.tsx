@@ -222,14 +222,24 @@ export default function CockpitScreen() {
   const panelGap = Math.max(8, Math.round(frame.width * 0.02));
   const contentWidth = Math.max(0, frame.width - contentPaddingX * 2);
   const availableWidth = Math.max(0, contentWidth - panelGap * 2);
-  const sidePanelWidth = Math.round(availableWidth * 0.36);
-  const centerWidth = Math.max(0, availableWidth - sidePanelWidth * 2);
-  const sidePanelHeight = Math.max(180, Math.min(frame.height * 0.55, 240));
-  const centerHeight = Math.max(230, Math.min(frame.height * 0.65, 300));
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  let sidePanelWidth = clamp(Math.round(availableWidth * 0.3), 150, 230);
+  let centerWidth = clamp(Math.round(availableWidth * 0.22), 140, 190);
+  let updatesPanelWidth = clamp(Math.round(availableWidth * 0.2), 120, 180);
+  const totalPanelWidth = sidePanelWidth + centerWidth + updatesPanelWidth;
+  const maxPanelWidth = Math.max(0, availableWidth - panelGap * 2);
+  if (totalPanelWidth > maxPanelWidth && totalPanelWidth > 0) {
+    const scale = maxPanelWidth / totalPanelWidth;
+    sidePanelWidth = Math.max(120, Math.round(sidePanelWidth * scale));
+    centerWidth = Math.max(120, Math.round(centerWidth * scale));
+    updatesPanelWidth = Math.max(100, Math.round(updatesPanelWidth * scale));
+  }
+  const sidePanelHeight = Math.max(160, Math.min(frame.height * 0.5, 210));
+  const centerHeight = Math.max(210, Math.min(frame.height * 0.58, 260));
   const chartWidth = Math.max(0, sidePanelWidth - 24);
   const chartHeight = Math.max(90, Math.min(sidePanelHeight * 0.45, 120));
-  const trackHeight = Math.max(120, Math.min(centerHeight * 0.6, 150));
-  const handleHeight = 46;
+  const trackHeight = Math.max(110, Math.min(centerHeight * 0.58, 140));
+  const handleHeight = 40;
   const leverTopMargin = 10;
   const leverBottomMargin = 26;
   const leverRange = trackHeight - handleHeight - leverTopMargin - leverBottomMargin;
@@ -672,47 +682,167 @@ export default function CockpitScreen() {
   const updates = useMemo<UpdateItem[]>(() => {
     const items: UpdateItem[] = [];
     if (error) {
-      items.push({ time: "00:38", message: `Alert: ${error}`, tone: "warning" });
+      items.push({ time: "00:40", message: `Alert: ${error}`, tone: "warning" });
     }
-    items.push({
-      time: "00:34",
-      message: `Phase ${round} / ${MAX_ROUNDS} briefing active`,
-      tone: "info",
-    });
-    items.push({
-      time: "00:31",
-      message: `Signal ${stableSignal ? "locked" : "drifting"} on ${symbol}`,
-      tone: stableSignal ? "success" : "warning",
-    });
-    items.push({
-      time: "00:28",
-      message: telemetry.status ? `Guidance: ${telemetry.status}` : "Guidance loop synchronized",
-      tone: "info",
-    });
-    items.push({
-      time: "00:24",
-      message: `Fuel flow ${
-        leverPosition === "up" ? "boosted" : leverPosition === "down" ? "reduced" : "balanced"
-      } | ${fuelValue} remaining`,
-      tone: "info",
-    });
-    items.push({
-      time: "00:21",
-      message: `Hull ${hullValue} | Jump ${progressValue}`,
-      tone: telemetry.hull !== undefined && telemetry.hull < 30 ? "warning" : "info",
-    });
-    return items;
-  }, [error, round, stableSignal, symbol, telemetry.status, leverPosition, fuelValue, hullValue, progressValue, telemetry.hull]);
 
-  const panelUpdates = updates.slice(0, 3);
+    const times = ["00:34", "00:31", "00:28", "00:25", "00:22"];
+    const makeItems = (messages: { tone: UpdateItem["tone"]; text: string }[]) =>
+      messages.map((message, index) => ({
+        time: times[index] ?? "00:20",
+        message: message.text,
+        tone: message.tone,
+      }));
+
+    const roundKey = Math.min(Math.max(round, 1), MAX_ROUNDS);
+    const symbolKey = (symbol || "NVDA").toUpperCase();
+
+    const updatesByRound: Record<number, Record<string, { tone: UpdateItem["tone"]; text: string }[]>> = {
+      1: {
+        NVDA: [
+          { tone: "warning", text: "인근 고출력 함선들이 단기 가속에 성공하고 있습니다" },
+          { tone: "warning", text: "선원들 사이에서 \"지금이 기회\"라는 낙관 무전이 증가 중입니다" },
+          { tone: "warning", text: "일부 파일럿은 출력 증폭으로 항로를 돌파했습니다" },
+          { tone: "success", text: "중력 간섭이 고출력 엔진에 더 크게 작용하고 있습니다" },
+          { tone: "success", text: "장거리 예측 모듈의 오차가 임계치를 초과했습니다" },
+        ],
+        AAPL: [
+          { tone: "warning", text: "대형 함선들이 안정 항로를 유지하며 전진 중입니다" },
+          { tone: "warning", text: "\"이 정도 환경은 충분히 견딜 수 있다\"는 의견이 우세합니다" },
+          { tone: "warning", text: "방어막이 유지되는 한 전진 시도도 가능해 보입니다" },
+          { tone: "success", text: "추진 여유가 빠르게 감소하고 있습니다" },
+          { tone: "success", text: "전진 대비 회복 비용이 점점 커지고 있습니다" },
+        ],
+        KO: [
+          { tone: "warning", text: "주변 항로의 빠른 전진과 비교하면 정체가 두드러집니다" },
+          { tone: "warning", text: "일부는 \"지금 올라타지 않으면 뒤처진다\"고 주장합니다" },
+          { tone: "success", text: "출력 변화에도 항로 이탈 가능성이 낮습니다" },
+          { tone: "success", text: "보급 모듈이 환경 변화에 거의 영향을 받지 않습니다" },
+          { tone: "success", text: "느리지만 안정적인 전진이 관측됩니다" },
+        ],
+      },
+      2: {
+        NVDA: [
+          { tone: "warning", text: "짧은 가속으로 큰 이동에 성공한 사례가 반복 보고됩니다" },
+          { tone: "warning", text: "\"타이밍만 맞으면 큰 보상\"이라는 무전이 확산 중입니다" },
+          { tone: "warning", text: "주변 소형 함선들이 빠르게 치고 나가고 있습니다" },
+          { tone: "success", text: "출력 조작에 따른 결과 편차가 극단적으로 커졌습니다" },
+          { tone: "success", text: "실패 시 손실 회복이 어려운 구간입니다" },
+        ],
+        AAPL: [
+          { tone: "warning", text: "항로 중심선이 자주 흔들리고 있습니다" },
+          { tone: "warning", text: "외부 소음이 잦아 조작 판단이 어렵습니다" },
+          { tone: "success", text: "노이즈 이후 항로 복구 빈도가 높습니다" },
+          { tone: "success", text: "급격한 조작 없이도 전진이 누적됩니다" },
+          { tone: "success", text: "방어와 전진의 균형이 유지되고 있습니다" },
+        ],
+        KO: [
+          { tone: "warning", text: "결정적인 가속 신호는 여전히 희미합니다" },
+          { tone: "warning", text: "주변 항로와 비교하면 이동 속도가 느립니다" },
+          { tone: "success", text: "환경 변화에도 출력이 거의 변하지 않습니다" },
+          { tone: "success", text: "전진 결과의 분산이 작습니다" },
+          { tone: "success", text: "안정적 누적 이동이 관측됩니다" },
+        ],
+      },
+      3: {
+        NVDA: [
+          { tone: "warning", text: "과열 경고가 점등되기 시작했습니다" },
+          { tone: "warning", text: "일부 파일럿은 \"지금은 너무 빠르다\"고 우려합니다" },
+          { tone: "warning", text: "출력 증폭이 리스크를 키운다는 분석도 존재합니다" },
+          { tone: "success", text: "고출력 상태에서 항로 저항이 급감합니다" },
+          { tone: "success", text: "출력 증가가 즉각적인 전진으로 연결됩니다" },
+        ],
+        AAPL: [
+          { tone: "warning", text: "급격한 가속이 없어 체감 속도가 느립니다" },
+          { tone: "warning", text: "\"지루한 항로\"라는 평가가 일부에서 나옵니다" },
+          { tone: "warning", text: "지금은 다른 함선이 더 매력적으로 보입니다" },
+          { tone: "success", text: "출력 없이도 위치가 꾸준히 개선됩니다" },
+          { tone: "success", text: "방향성은 일관되게 유지됩니다" },
+        ],
+        KO: [
+          { tone: "warning", text: "큰 이동이 없어 전진이 눈에 띄지 않습니다" },
+          { tone: "warning", text: "일부는 \"이 환경에서 굳이?\"라고 의문을 제기합니다" },
+          { tone: "warning", text: "기회 비용이 커 보입니다" },
+          { tone: "success", text: "항로 전체가 완만한 전진 흐름을 보입니다" },
+          { tone: "success", text: "손실 신호 없이 위치가 개선됩니다" },
+        ],
+      },
+      4: {
+        NVDA: [
+          { tone: "warning", text: "통제 필드가 예고 없이 작동하는 구간이 있습니다" },
+          { tone: "warning", text: "실패 시 손실이 크다는 경고가 반복됩니다" },
+          { tone: "warning", text: "일부 파일럿은 접근 자체를 회피 중입니다" },
+          { tone: "success", text: "고출력 엔진이 통제 구간을 우회하는 반응을 보입니다" },
+          { tone: "success", text: "위험 구간 돌파 시 전진 폭이 큽니다" },
+        ],
+        AAPL: [
+          { tone: "warning", text: "선체 안정성이 여전히 신뢰를 주고 있습니다" },
+          { tone: "warning", text: "집단 이동 선단이 전진을 선택했습니다" },
+          { tone: "warning", text: "\"지금은 유지보다 전진\"이라는 의견도 존재합니다" },
+          { tone: "success", text: "추가 점검 절차로 추진 효율이 감소했습니다" },
+          { tone: "success", text: "전진 대비 소모가 커지고 있습니다" },
+        ],
+        KO: [
+          { tone: "warning", text: "방어적 항해가 심리적으로 답처럼 보입니다" },
+          { tone: "warning", text: "\"천천히라도 가는 게 낫다\"는 무전이 반복됩니다" },
+          { tone: "warning", text: "주변 함선들이 미세 전진을 이어가고 있습니다" },
+          { tone: "success", text: "확장 시 손실 누적 패턴이 감지됩니다" },
+          { tone: "success", text: "유지 전략이 상대적으로 유리해 보입니다" },
+        ],
+      },
+      5: {
+        ALL: [
+          { tone: "warning", text: "인근 항로에서 예상 외의 반등 로그가 포착되었습니다" },
+          { tone: "warning", text: "일부 함선이 고출력 돌파로 단기 성공을 보고했습니다" },
+          { tone: "warning", text: "\"이 정도 공포는 과하다\"는 의견이 늘어나고 있습니다" },
+          { tone: "success", text: "출력 대비 손실 비율이 전반적으로 증가했습니다" },
+          { tone: "success", text: "실패 후 회복 시간이 길어지고 있습니다" },
+        ],
+      },
+      6: {
+        ALL: [
+          { tone: "warning", text: "일부는 \"지금이 마지막 고점\"이라고 경고합니다" },
+          { tone: "warning", text: "과도한 낙관이 위험하다는 분석도 병존합니다" },
+          { tone: "warning", text: "작은 충격에도 조정이 올 수 있다는 의견이 있습니다" },
+          { tone: "success", text: "환경과 엔진 반응의 정렬도가 높아졌습니다" },
+          { tone: "success", text: "전진 결과가 예측과 점점 일치합니다" },
+        ],
+      },
+    };
+
+    const roundUpdates = updatesByRound[roundKey] ?? {};
+    const selectedUpdates = roundUpdates[symbolKey] ?? roundUpdates.ALL ?? [];
+    return items.concat(makeItems(selectedUpdates));
+  }, [error, round, symbol]);
+
+  const panelUpdates = updates.slice(0, 5);
   const windowLayer = (
     <View style={s.window} pointerEvents="none">
       <ImageBackground source={{ uri: BG_IMAGE }} style={StyleSheet.absoluteFillObject} resizeMode="cover">
         <View style={s.windowOverlay} />
+        <View style={s.windowAurora} />
+        <View style={s.windowAuroraAlt} />
+        <View style={s.windowVignette} />
       </ImageBackground>
       <View style={s.glassSheen} />
       <View style={s.glassSheenSecondary} />
       <View style={s.windowRim} />
+    </View>
+  );
+  const cockpitFrameLayer = (
+    <View style={s.windowFrame} pointerEvents="none">
+      <View style={s.frameBeamTop} />
+      <View style={s.frameBeamBottom} />
+      <View style={s.frameBeamLeft} />
+      <View style={s.frameBeamRight} />
+      <View style={[s.frameStrut, s.frameStrutLeft]} />
+      <View style={[s.frameStrut, s.frameStrutRight]} />
+      <View style={[s.frameStrut, s.frameStrutCenter]} />
+      <View style={s.hudRingOuter} />
+      <View style={s.hudRingInner} />
+      <View style={[s.hudCorner, s.hudCornerTL]} />
+      <View style={[s.hudCorner, s.hudCornerTR]} />
+      <View style={[s.hudCorner, s.hudCornerBL]} />
+      <View style={[s.hudCorner, s.hudCornerBR]} />
     </View>
   );
 
@@ -911,6 +1041,7 @@ export default function CockpitScreen() {
       <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
         {windowLayer}
+        {cockpitFrameLayer}
         {round === 1 && view === "cockpit" && phaseOneHintStep < PHASE_ONE_HINTS.length ? (
           <View style={[s.phaseOneHint, { left: contentPaddingX, right: contentPaddingX }]}>
             <Text style={s.phaseOneHintText}>{PHASE_ONE_HINTS[phaseOneHintStep]}</Text>
@@ -966,10 +1097,6 @@ export default function CockpitScreen() {
                 </View>
                 <View style={s.leverBase} />
               </View>
-              <Text style={s.leverState}>
-                {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
-              </Text>
-              <Text style={s.leverHint}>Swipe up or down</Text>
               <View style={s.confirmDock}>
                 <Pressable
                   style={({ pressed }) => [
@@ -983,6 +1110,12 @@ export default function CockpitScreen() {
                   <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
                 </Pressable>
               </View>
+              <View style={s.leverStatusWrap} pointerEvents="none">
+                <Text style={s.leverState}>
+                  {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
+                </Text>
+                <Text style={s.leverHint}>Swipe up or down</Text>
+              </View>
               {decisionError ? <Text style={s.decisionError}>{decisionError}</Text> : null}
             </View>
 
@@ -991,25 +1124,22 @@ export default function CockpitScreen() {
               onPress={() => setView("info")}
               style={({ pressed }) => [
                 s.sidePanel,
-                { width: sidePanelWidth, height: sidePanelHeight },
+                s.sidePanelTight,
+                s.sidePanelRightTight,
+                { width: updatesPanelWidth, height: sidePanelHeight },
                 pressed && s.panelPressed,
               ]}
             >
-              <Text style={s.panelTitle}>UPDATES</Text>
+              <Text style={[s.panelTitle, s.panelTitleTight]}>UPDATES</Text>
               <View style={s.updateList}>
                 {panelUpdates.map((item, index) => (
                   <View key={`${item.time}-${index}`} style={s.updateRow}>
                     <View style={[s.updateDot, { backgroundColor: theme.colors.accent }]} />
-                    <View style={s.updateCopy}>
-                      <Text style={s.updateTime}>{item.time}</Text>
-                      <Text style={s.updateText} numberOfLines={2}>
-                        {item.message}
-                      </Text>
-                    </View>
+                    <Text style={s.updateTimeOnly}>{item.time}</Text>
                   </View>
                 ))}
               </View>
-              <Text style={s.panelHint}>Tap to expand</Text>
+              <Text style={[s.panelHint, s.panelHintCompact]}>Tap to expand</Text>
             </Pressable>
           </View>
         </View>
@@ -1031,6 +1161,100 @@ const s = StyleSheet.create({
   outcomeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.25)" },
   window: { ...StyleSheet.absoluteFillObject },
   windowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
+  windowAurora: {
+    position: "absolute",
+    width: "140%",
+    height: "140%",
+    top: "-20%",
+    left: "-10%",
+    backgroundColor: "rgba(14,116,144,0.18)",
+    transform: [{ rotate: "-8deg" }],
+  },
+  windowAuroraAlt: {
+    position: "absolute",
+    width: "120%",
+    height: "90%",
+    top: "20%",
+    left: "-10%",
+    backgroundColor: "rgba(234,88,12,0.12)",
+    transform: [{ rotate: "6deg" }],
+  },
+  windowVignette: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  windowFrame: { ...StyleSheet.absoluteFillObject },
+  frameBeamTop: {
+    position: "absolute",
+    top: 0,
+    left: "-5%",
+    right: "-5%",
+    height: 26,
+    backgroundColor: "rgba(8,12,20,0.9)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(56,189,248,0.25)",
+  },
+  frameBeamBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: "-6%",
+    right: "-6%",
+    height: 28,
+    backgroundColor: "rgba(6,10,16,0.95)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(251,191,36,0.25)",
+  },
+  frameBeamLeft: {
+    position: "absolute",
+    left: -18,
+    top: "6%",
+    bottom: "6%",
+    width: 30,
+    backgroundColor: "rgba(7,11,18,0.9)",
+    borderRightWidth: 1,
+    borderRightColor: "rgba(56,189,248,0.2)",
+    transform: [{ rotate: "-6deg" }],
+  },
+  frameBeamRight: {
+    position: "absolute",
+    right: -18,
+    top: "6%",
+    bottom: "6%",
+    width: 30,
+    backgroundColor: "rgba(7,11,18,0.9)",
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(56,189,248,0.2)",
+    transform: [{ rotate: "6deg" }],
+  },
+  frameStrut: {
+    position: "absolute",
+    height: 12,
+    backgroundColor: "rgba(10,14,22,0.9)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(251,191,36,0.25)",
+  },
+  frameStrutLeft: {
+    width: "60%",
+    top: "26%",
+    left: "-8%",
+    transform: [{ rotate: "-12deg" }],
+  },
+  frameStrutRight: {
+    width: "60%",
+    top: "26%",
+    right: "-8%",
+    transform: [{ rotate: "12deg" }],
+  },
+  frameStrutCenter: {
+    width: "18%",
+    top: "18%",
+    left: "41%",
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: "rgba(12,17,29,0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+  },
   glassSheen: {
     position: "absolute",
     width: "120%",
@@ -1054,6 +1278,36 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.25)",
   },
+  hudRingOuter: {
+    position: "absolute",
+    width: "110%",
+    height: "110%",
+    top: "-5%",
+    left: "-5%",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.18)",
+  },
+  hudRingInner: {
+    position: "absolute",
+    width: "78%",
+    height: "78%",
+    top: "11%",
+    left: "11%",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.2)",
+  },
+  hudCorner: {
+    position: "absolute",
+    width: 24,
+    height: 24,
+    borderColor: "rgba(251,191,36,0.45)",
+  },
+  hudCornerTL: { top: 10, left: 10, borderTopWidth: 2, borderLeftWidth: 2 },
+  hudCornerTR: { top: 10, right: 10, borderTopWidth: 2, borderRightWidth: 2 },
+  hudCornerBL: { bottom: 10, left: 10, borderBottomWidth: 2, borderLeftWidth: 2 },
+  hudCornerBR: { bottom: 10, right: 10, borderBottomWidth: 2, borderRightWidth: 2 },
   phaseOneHint: {
     position: "absolute",
     top: 12,
@@ -1214,7 +1468,7 @@ const s = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: "42%",
-    backgroundColor: "rgba(4,7,14,0.92)",
+    backgroundColor: "rgba(32,32,32,0.92)",
   },
   consoleEdge: { position: "absolute", top: 0, left: 0, right: 0, height: 2, backgroundColor: "rgba(251,191,36,0.22)" },
   consoleGlow: {
@@ -1304,35 +1558,49 @@ const s = StyleSheet.create({
   roundButtonPressed: { transform: [{ scale: 0.97 }] },
   roundButtonText: { color: theme.colors.textPrimary, fontWeight: "900", letterSpacing: 1 },
   sidePanel: {
-    backgroundColor: "rgba(12,17,29,0.72)",
+    backgroundColor: "rgba(10,14,22,0.82)",
     borderRadius: theme.radius.lg,
     padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.3)",
+    borderColor: "rgba(251,191,36,0.45)",
+    shadowColor: "#fbbf24",
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   panelPressed: { transform: [{ scale: 0.98 }] },
-  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 13, letterSpacing: 0.8, marginBottom: 8 },
+  sidePanelTight: { padding: 8 },
+  sidePanelRightTight: { paddingRight: 0 },
+  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 13, letterSpacing: 1.1, marginBottom: 8 },
+  panelTitleTight: { marginBottom: 4 },
   chartWindow: { borderRadius: theme.radius.md, padding: 6, backgroundColor: "rgba(0,0,0,0.35)" },
   panelMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 999 },
   panelMetaText: { color: theme.colors.textMuted, fontSize: 11 },
   errorText: { color: theme.colors.danger, fontSize: 10, marginTop: 6 },
   panelHint: { color: theme.colors.textHint, fontSize: 10, marginTop: "auto", letterSpacing: 0.4 },
+  panelHintCompact: { marginTop: 6 },
   leverPanel: {
-    backgroundColor: "rgba(10,14,22,0.78)",
+    backgroundColor: "rgba(8,12,20,0.86)",
     borderRadius: theme.radius.lg,
     padding: 12,
     paddingBottom: 54,
     borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.35)",
+    borderColor: "rgba(251,191,36,0.5)",
     alignItems: "center",
+    shadowColor: "#fb923c",
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   roundBadge: { color: theme.colors.textAccentStrong, fontSize: 12, letterSpacing: 0.8, marginBottom: 6 },
-  leverWell: { width: 86, alignItems: "center", justifyContent: "center", position: "relative", marginTop: 4 },
+  leverWell: { width: 72, alignItems: "center", justifyContent: "center", position: "relative", marginTop: 4 },
   leverTrack: {
     position: "absolute",
-    width: 60,
-    borderRadius: 18,
+    width: 50,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: theme.colors.accentBorderSoft,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -1345,10 +1613,10 @@ const s = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(251,191,36,0.4)",
   },
-  leverHandle: { position: "absolute", width: 54, height: 46, alignItems: "center", justifyContent: "flex-start" },
+  leverHandle: { position: "absolute", width: 46, height: 40, alignItems: "center", justifyContent: "flex-start" },
   leverKnob: {
-    width: 46,
-    height: 16,
+    width: 40,
+    height: 14,
     borderRadius: 999,
     backgroundColor: "rgba(234,88,12,0.9)",
     borderWidth: 1,
@@ -1356,11 +1624,11 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  leverKnobInset: { width: 24, height: 5, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.35)" },
+  leverKnobInset: { width: 18, height: 5, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.35)" },
   leverStem: {
     marginTop: 4,
-    width: 6,
-    height: 26,
+    width: 5,
+    height: 22,
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.6)",
   },
@@ -1374,8 +1642,15 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.3)",
   },
-  leverState: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 12, letterSpacing: 0.7 },
-  leverHint: { marginTop: 4, color: theme.colors.textHint, fontSize: 10 },
+  leverStatusWrap: {
+    position: "absolute",
+    right: 10,
+    top: "40%",
+    alignItems: "flex-start",
+    gap: 2,
+  },
+  leverState: { color: theme.colors.textAccentStrong, fontSize: 11, letterSpacing: 0.6 },
+  leverHint: { color: theme.colors.textHint, fontSize: 9 },
   confirmDock: { position: "absolute", left: 0, right: 0, bottom: 12, alignItems: "center" },
   confirmButton: {
     paddingVertical: 8,
@@ -1389,10 +1664,8 @@ const s = StyleSheet.create({
   confirmDisabled: { opacity: 0.4 },
   confirmText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 0.8 },
   decisionError: { marginTop: 6, color: theme.colors.warning, fontSize: 10, textAlign: "center" },
-  updateList: { gap: 10, marginTop: 4 },
-  updateRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
-  updateDot: { width: 6, height: 6, borderRadius: 999, marginTop: 6 },
-  updateCopy: { flex: 1 },
-  updateTime: { color: theme.colors.textAccent, fontSize: 10, marginBottom: 2 },
-  updateText: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16 },
+  updateList: { gap: 6, marginTop: 2, paddingRight: 0 },
+  updateRow: { flexDirection: "row", gap: 6, alignItems: "center" },
+  updateDot: { width: 5, height: 5, borderRadius: 999 },
+  updateTimeOnly: { color: theme.colors.textAccent, fontSize: 11, letterSpacing: 0.5 },
 });
