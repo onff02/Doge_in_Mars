@@ -14,6 +14,7 @@ const fallbackRockets = [
 ];
 
 const STAR_COUNT = 15;
+const DESIGN_FRAME = { width: 932, height: 430 };
 const BG_IMAGE =
   "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
 
@@ -45,7 +46,7 @@ function createStars(count: number): Star[] {
   }));
 }
 
-function StatBar({ value, delay }: { value: number; delay: number }) {
+function StatBar({ value, delay, height }: { value: number; delay: number; height: number }) {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -56,7 +57,7 @@ function StatBar({ value, delay }: { value: number; delay: number }) {
 
   const width = progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${value * 10}%`] });
 
-  return <Animated.View style={[s.statFill, { width }]} />;
+  return <Animated.View style={[s.statFill, { width, height, borderRadius: height }]} />;
 }
 
 export default function RocketSelectScreen() {
@@ -167,7 +168,7 @@ export default function RocketSelectScreen() {
   }, []);
 
   const frame = useMemo(() => {
-    const targetRatio = 932 / 430;
+    const targetRatio = DESIGN_FRAME.width / DESIGN_FRAME.height;
     const padding = 24;
     const maxW = Math.max(0, width - padding * 2);
     const maxH = Math.max(0, height - padding * 2);
@@ -180,7 +181,44 @@ export default function RocketSelectScreen() {
     return { width: frameW, height: frameH };
   }, [height, width]);
 
-  const isWide = frame.width >= 720;
+  const scale = Math.min(1, frame.width / DESIGN_FRAME.width, frame.height / DESIGN_FRAME.height);
+  const ui = useMemo(() => {
+    const scaleSize = (value: number, min: number) => Math.max(min, Math.round(value * scale));
+    return {
+      contentPadding: scaleSize(18, 10),
+      headerMargin: scaleSize(8, 4),
+      backPadV: scaleSize(4, 2),
+      backPadH: scaleSize(6, 3),
+      backFont: scaleSize(11, 8),
+      titleFont: scaleSize(14, 10),
+      titleLetter: Math.max(0.5, 1 * scale),
+      headerSpacer: scaleSize(60, 32),
+      helperFont: scaleSize(11, 8),
+      cardsGap: scaleSize(14, 8),
+      cardPadding: scaleSize(14, 8),
+      checkOffset: scaleSize(12, 6),
+      checkPadH: scaleSize(8, 4),
+      checkPadV: scaleSize(4, 2),
+      checkFont: scaleSize(10, 8),
+      shipSize: scaleSize(80, 48),
+      shipMargin: scaleSize(10, 6),
+      infoMargin: scaleSize(10, 6),
+      cardTitleFont: scaleSize(14, 10),
+      cardTitleMargin: scaleSize(4, 2),
+      cardDescFont: scaleSize(11, 8),
+      statsGap: scaleSize(8, 4),
+      statRowGap: scaleSize(6, 3),
+      statLabelFont: scaleSize(10, 8),
+      statValueFont: scaleSize(10, 8),
+      statTrack: scaleSize(6, 4),
+      confirmMargin: scaleSize(8, 4),
+      confirmPadV: scaleSize(10, 6),
+      confirmFont: scaleSize(11, 9),
+      confirmLetter: Math.max(0.5, 0.9 * scale),
+    };
+  }, [scale]);
+
+  const isWide = frame.width >= 560;
   const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
   const pulseScale = confirmPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.2] });
   const pulseOpacity = confirmPulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
@@ -219,19 +257,34 @@ export default function RocketSelectScreen() {
             })}
           </View>
 
-          <View style={s.content}>
-            <View style={s.header}>
-              <Pressable style={({ pressed }) => [s.backButton, pressed && s.backPressed]} onPress={() => nav.goBack()}>
-                <Text style={s.backText}>{"< BACK"}</Text>
+          <View style={[s.content, { padding: ui.contentPadding }]}>
+            <View style={[s.header, { marginBottom: ui.headerMargin }]}>
+              <Pressable
+                style={({ pressed }) => [s.backButton, { paddingVertical: ui.backPadV, paddingHorizontal: ui.backPadH }, pressed && s.backPressed]}
+                onPress={() => nav.goBack()}
+              >
+                <Text style={[s.backText, { fontSize: ui.backFont }]} allowFontScaling={false}>
+                  {"< BACK"}
+                </Text>
               </Pressable>
-              <Text style={s.headerTitle}>SELECT YOUR ROCKET</Text>
-              <View style={s.headerSpacer} />
+              <Text style={[s.headerTitle, { fontSize: ui.titleFont, letterSpacing: ui.titleLetter }]} allowFontScaling={false}>
+                SELECT YOUR ROCKET
+              </Text>
+              <View style={[s.headerSpacer, { width: ui.headerSpacer }]} />
             </View>
 
-            {isLoading ? <Text style={s.loadingText}>Loading rockets...</Text> : null}
-            {error ? <Text style={s.errorText}>{error}</Text> : null}
+            {isLoading ? (
+              <Text style={[s.loadingText, { fontSize: ui.helperFont }]} allowFontScaling={false}>
+                Loading rockets...
+              </Text>
+            ) : null}
+            {error ? (
+              <Text style={[s.errorText, { fontSize: ui.helperFont }]} allowFontScaling={false}>
+                {error}
+              </Text>
+            ) : null}
 
-            <View style={[s.cards, !isWide && s.cardsStack]}>
+            <View style={[s.cards, { gap: ui.cardsGap }, !isWide && s.cardsStack]}>
               {rocketCards.map((rocket, index) => {
                 const selected = selectedRocket === rocket.id;
                 return (
@@ -240,37 +293,48 @@ export default function RocketSelectScreen() {
                     onPress={() => setSelectedRocket(rocket.id)}
                     style={({ pressed }) => [
                       s.card,
+                      { padding: ui.cardPadding },
                       selected && s.cardSelected,
                       pressed && s.cardPressed,
                       !isWide && s.cardStack,
                     ]}
                   >
                     {selected ? (
-                      <View style={s.checkBadge}>
-                        <Text style={s.checkText}>OK</Text>
+                      <View style={[s.checkBadge, { right: ui.checkOffset, top: ui.checkOffset, paddingHorizontal: ui.checkPadH, paddingVertical: ui.checkPadV }]}>
+                        <Text style={[s.checkText, { fontSize: ui.checkFont }]} allowFontScaling={false}>
+                          OK
+                        </Text>
                       </View>
                     ) : null}
 
-                    <View style={s.shipWrap}>
+                    <View style={[s.shipWrap, { marginBottom: ui.shipMargin }]}>
                       <Animated.View style={selected ? { transform: [{ translateY: floatY }] } : undefined}>
-                        <SpaceshipVariant type={rocket.id} size={80} />
+                        <SpaceshipVariant type={rocket.id} size={ui.shipSize} />
                       </Animated.View>
                     </View>
 
-                    <View style={s.cardInfo}>
-                      <Text style={s.cardTitle}>{rocket.name}</Text>
-                      <Text style={s.cardDesc}>{rocket.description}</Text>
+                    <View style={[s.cardInfo, { marginBottom: ui.infoMargin }]}>
+                      <Text style={[s.cardTitle, { fontSize: ui.cardTitleFont, marginBottom: ui.cardTitleMargin }]} allowFontScaling={false}>
+                        {rocket.name}
+                      </Text>
+                      <Text style={[s.cardDesc, { fontSize: ui.cardDescFont }]} allowFontScaling={false}>
+                        {rocket.description}
+                      </Text>
                     </View>
 
-                    <View style={s.stats}>
+                    <View style={[s.stats, { gap: ui.statsGap }]}>
                       {Object.entries(rocket.stats).map(([key, value]) => (
-                        <View key={key} style={s.statRow}>
+                        <View key={key} style={[s.statRow, { gap: ui.statRowGap }]}>
                           <View style={s.statHeader}>
-                            <Text style={s.statLabel}>{key.toUpperCase()}</Text>
-                            <Text style={s.statValue}>{value}</Text>
+                            <Text style={[s.statLabel, { fontSize: ui.statLabelFont }]} allowFontScaling={false}>
+                              {key.toUpperCase()}
+                            </Text>
+                            <Text style={[s.statValue, { fontSize: ui.statValueFont }]} allowFontScaling={false}>
+                              {value}
+                            </Text>
                           </View>
-                          <View style={s.statTrack}>
-                            <StatBar value={value} delay={500 + index * 120} />
+                          <View style={[s.statTrack, { height: ui.statTrack, borderRadius: ui.statTrack }]}>
+                            <StatBar value={value} delay={500 + index * 120} height={ui.statTrack} />
                           </View>
                         </View>
                       ))}
@@ -280,18 +344,21 @@ export default function RocketSelectScreen() {
               })}
             </View>
 
-            <View style={s.confirmWrap}>
+            <View style={[s.confirmWrap, { marginTop: ui.confirmMargin }]}>
               <Pressable
                 onPress={handleConfirm}
                 disabled={!selectedRocket}
                 style={({ pressed }) => [
                   s.confirmButton,
+                  { paddingVertical: ui.confirmPadV },
                   !selectedRocket && s.confirmDisabled,
                   pressed && selectedRocket && s.confirmPressed,
                 ]}
               >
                 <View style={s.confirmGlow} pointerEvents="none" />
-                <Text style={s.confirmText}>CONFIRM SELECTION</Text>
+                <Text style={[s.confirmText, { fontSize: ui.confirmFont, letterSpacing: ui.confirmLetter }]} allowFontScaling={false}>
+                  CONFIRM SELECTION
+                </Text>
                 {selectedRocket ? (
                   <Animated.View style={[s.confirmPulse, { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} pointerEvents="none" />
                 ) : null}
@@ -357,7 +424,7 @@ const s = StyleSheet.create({
   cardDesc: { color: theme.colors.textMuted, fontSize: 11, textAlign: "center" },
   stats: { gap: 8 },
   statRow: { gap: 6 },
-  statHeader: { flexDirection: "row", justifyContent: "space-between" },
+  statHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   statLabel: { color: theme.colors.textAccent, fontSize: 10 },
   statValue: { color: theme.colors.textPrimary, fontSize: 10, fontWeight: "800" },
   statTrack: { height: 6, borderRadius: 99, backgroundColor: theme.colors.track, overflow: "hidden" },

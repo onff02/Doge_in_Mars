@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImageBackground, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEventListener } from "expo";
 import { Audio } from "expo-av";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -10,7 +11,7 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
-import { getAuthToken, getChart, getFlightStatus, startFlight, syncFlight } from "../api/client";
+import { clearAuthSession, getAuthToken, getChart, getFlightStatus, startFlight, syncFlight } from "../api/client";
 
 type Telemetry = {
   fuel?: number;
@@ -130,6 +131,7 @@ function OutcomeVideo({ source, onEnd }: { source: number; onEnd: () => void }) 
 }
 
 export default function CockpitScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "Cockpit">>();
   const rocketId = route.params?.rocketId ?? 1;
   const startInRound = route.params?.startInRound ?? false;
@@ -318,6 +320,11 @@ export default function CockpitScreen() {
     setView("finalResult");
   }, []);
 
+  const handleLogout = useCallback(async () => {
+    await clearAuthSession();
+    nav.reset({ index: 0, routes: [{ name: "Start" }] });
+  }, [nav]);
+
   const handleConfirm = useCallback(async () => {
     setDecisionError("");
     if (chartValues.length < 2) {
@@ -471,6 +478,9 @@ export default function CockpitScreen() {
               <Text style={s.finalTitle}>RESULT</Text>
               <Text style={s.finalScore}>{finalScoreLabel}</Text>
               <Text style={s.finalMessage}>{finalMessage}</Text>
+              <Pressable style={({ pressed }) => [s.finalLogout, pressed && s.finalLogoutPressed]} onPress={handleLogout}>
+                <Text style={s.finalLogoutText}>LOG OUT</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -609,7 +619,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.2)",
   },
   outcomeVideo: { ...StyleSheet.absoluteFillObject },
-  outcomeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.25)" },
+  outcomeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.08)" },
   window: { ...StyleSheet.absoluteFillObject },
   windowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
   glassSheen: {
@@ -684,6 +694,17 @@ const s = StyleSheet.create({
   finalTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 16, letterSpacing: 1, marginBottom: 8 },
   finalScore: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 26, letterSpacing: 1, marginBottom: 10 },
   finalMessage: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center" },
+  finalLogout: {
+    marginTop: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorderStrong,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  finalLogoutPressed: { transform: [{ scale: 0.98 }] },
+  finalLogoutText: { color: theme.colors.textAccentStrong, fontWeight: "800", fontSize: 11, letterSpacing: 0.8 },
   roundButton: {
     paddingVertical: 10,
     paddingHorizontal: 26,

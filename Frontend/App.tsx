@@ -10,7 +10,7 @@ export default function App() {
     // [중요] 본인의 EC2 퍼블릭 IP 주소로 변경하세요.
     // 80번 포트로 아파치를 설치하셨다면 포트번호를 빼거나,
     // 백엔드가 3000번 등 다른 포트에서 돌고 있다면 해당 포트를 적어주세요.
-    const BACKEND_URL = 'http://43.202.45.31:3000'; 
+    const BACKEND_URL = 'http://52.78.92.200:3000'; 
 
     console.log("🚀 백엔드 연결 시도 중...");
 
