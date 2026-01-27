@@ -15,10 +15,12 @@ interface ChartScreenProps {
   onBack: () => void;
   round?: number;    // 현재 라운드 (기본값 1)
   symbol?: string;   // 로켓 종목 심볼 (기본값 NVDA)
+  data: number[];    // Cockpit에서 전달받은 실제 주가 데이터
 }
 
 export default function ChartScreen({ 
   onBack, 
+  data,
   round = 1, 
   symbol = "NVDA" 
 }: ChartScreenProps) {
@@ -99,10 +101,10 @@ export default function ChartScreen({
           <View style={s.chartCard}>
             {loading ? (
               <ActivityIndicator size="large" color={theme.colors.accent} />
-            ) : chartData.length > 0 ? (
+            ) : chartData && chartData.length > 0 ? (
               <TrajectoryGSIChart data={chartData} width={chartWidth} height={chartHeight} />
             ) : (
-              <Text style={{ color: theme.colors.textAccent }}>데이터를 찾을 수 없습니다.</Text>
+              <Text style={{ color: theme.colors.textAccent }}>신호 동기화 중...</Text>
             )}
           </View>
 

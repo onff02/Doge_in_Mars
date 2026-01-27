@@ -211,6 +211,59 @@ export default function CockpitScreen() {
     [decisionError]
   );
 
+  const fetchChartData = useCallback(async (targetSymbol: string, targetRound: number) => {
+    if (!targetSymbol) return; // 종목이 없으면 요청하지 않음
+    try {
+      setIsLoading(true);
+      const chart = await getChart(targetSymbol, targetRound);
+      if (chart && chart.gravityData) {
+        setChartValues(chart.gravityData.values);
+        setStabilityValues(chart.gravityData.stability);
+        chartCursor.current = 1;
+      }
+    } catch (e) {
+      console.error("차트 로드 실패:", e);
+      setError("중력파 데이터를 가져올 수 없습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      try {
+        // 1. 서버에서 전체 로켓 목록을 가져와 현재 선택한 로켓의 이름(Symbol)을 찾음
+        const { rockets } = await getRockets();
+        const currentRocket = rockets.find((r) => r.id === rocketId);
+        const rocketName = currentRocket?.name || "NVDA"; // 찾지 못할 경우 기본값
+
+        // 2. 현재 진행 중인 비행 세션 확인
+        const status = await getFlightStatus();
+        let activeSymbol = rocketName;
+
+        if (status.activeSession) {
+          activeSymbol = status.activeSession.symbol;
+        } else {
+          // 세션이 없으면 새로 시작
+          const start = await startFlight({ rocketId, symbol: rocketName });
+          activeSymbol = start.session.symbol;
+        }
+
+        setSymbol(activeSymbol); // 기호 확정
+        await fetchChartData(activeSymbol, round); // 첫 라운드 데이터 로드
+      } catch (e) {
+        console.error("초기 설정 실패:", e);
+      }
+    };
+    bootstrap();
+  }, [rocketId]); // 로켓이 바뀔 때만 실행
+
+  useEffect(() => {
+    if (symbol && round > 1) {
+      fetchChartData(symbol, round);
+    }
+  }, [round, symbol, fetchChartData]);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -448,7 +501,7 @@ export default function CockpitScreen() {
   );
 
   if (view === "chart") {
-    return <ChartScreen data={gsiData} onBack={() => setView("cockpit")} />;
+    return <ChartScreen data={gsiData} onBack={() => setView("cockpit")} symbol={symbol} round={round}/>;
   }
 
   if (view === "info") {
