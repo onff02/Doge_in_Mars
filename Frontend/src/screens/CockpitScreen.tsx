@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImageBackground, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEventListener } from "expo";
 import { Audio } from "expo-av";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -130,6 +131,7 @@ function OutcomeVideo({ source, onEnd }: { source: number; onEnd: () => void }) 
 }
 
 export default function CockpitScreen() {
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList, "Cockpit">>();
   const route = useRoute<RouteProp<RootStackParamList, "Cockpit">>();
   const rocketId = route.params?.rocketId ?? 1;
   const startInRound = route.params?.startInRound ?? false;
@@ -302,7 +304,7 @@ export default function CockpitScreen() {
     return () => {
       isMounted = false;
     };
-  }, [rocketId, round]);
+  }, [rocketId, symbol, round]);
 
   const handleOutcomeEnd = useCallback(() => {
     if (pendingFinalKey) {
@@ -323,6 +325,11 @@ export default function CockpitScreen() {
     setView("finalResult");
   }, []);
 
+  const handleLogout = useCallback(async () => {
+    await clearAuthSession();
+    nav.reset({ index: 0, routes: [{ name: "Start" }] });
+  }, [nav]);
+  
   const handleConfirm = useCallback(async () => {
     setDecisionError("");
     if (chartValues.length < 2) {

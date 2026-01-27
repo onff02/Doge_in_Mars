@@ -6,7 +6,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import type { RootStackParamList } from "../navigation";
 import { Spaceship } from "../components/Spaceship";
 import { theme } from "../theme";
-import { getAuthToken, getAuthUser } from "../api/client";
+import { clearAuthSession, getAuthToken, getAuthUser } from "../api/client";
 
 const STAR_COUNT = 20;
 const BG_IMAGE =
@@ -138,6 +138,12 @@ export default function StartScreen() {
     }, [])
   );
 
+  const handleLogout = useCallback(async () => {
+    await clearAuthSession();
+    setIsAuthed(false);
+    setIntroViewed(false);
+  }, []);
+
   return (
     <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
@@ -188,6 +194,9 @@ export default function StartScreen() {
                     <View style={s.buttonContent}>
                       <Text style={s.buttonText}>GAME START</Text>
                     </View>
+                  </Pressable>
+                  <Pressable style={({ pressed }) => [s.logoutButton, pressed && s.authButtonPressed]} onPress={handleLogout}>
+                    <Text style={s.logoutButtonText}>LOG OUT</Text>
                   </Pressable>
                   <Animated.Text style={[s.hint, { opacity: hintOpacity }]}>Press to begin your journey</Animated.Text>
                 </>
@@ -271,4 +280,14 @@ const s = StyleSheet.create({
   authButtonText: { color: theme.colors.textAccentStrong, fontWeight: "800", fontSize: 12, letterSpacing: 0.8 },
   authButtonTextFilled: { color: theme.colors.accent },
   hint: { marginTop: 10, color: theme.colors.textAccentStrong, fontSize: 12 },
+  logoutButton: {
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorder,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  logoutButtonText: { color: theme.colors.textAccentStrong, fontWeight: "800", fontSize: 11, letterSpacing: 0.8 },
 });

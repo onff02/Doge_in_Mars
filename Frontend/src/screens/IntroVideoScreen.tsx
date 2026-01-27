@@ -81,7 +81,7 @@ export default function IntroVideoScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.black },
   video: { ...StyleSheet.absoluteFillObject },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.08)" },
   btn: {
     position: "absolute",
     bottom: 28,
