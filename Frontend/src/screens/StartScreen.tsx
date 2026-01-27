@@ -100,19 +100,7 @@ export default function StartScreen() {
     };
   }, [float, hint, pulse, stars, twinkles]);
 
-  const frame = useMemo(() => {
-    const targetRatio = 932 / 430;
-    const padding = 24;
-    const maxW = Math.max(0, width - padding * 2);
-    const maxH = Math.max(0, height - padding * 2);
-    let frameW = Math.min(maxW, 932);
-    let frameH = frameW / targetRatio;
-    if (frameH > maxH) {
-      frameH = maxH;
-      frameW = frameH * targetRatio;
-    }
-    return { width: frameW, height: frameH };
-  }, [height, width]);
+  const frame = useMemo(() => ({ width, height }), [height, width]);
 
   const isWide = frame.width >= 700;
   const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });

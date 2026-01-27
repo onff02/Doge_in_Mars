@@ -19,19 +19,7 @@ const rocketNames = ["PIONEER", "TITAN", "STRIKER"];
 export default function InfoScreen({ rocketId, onBack, updates }: InfoScreenProps) {
   const { width, height } = useWindowDimensions();
 
-  const frame = useMemo(() => {
-    const targetRatio = 932 / 430;
-    const padding = 24;
-    const maxW = Math.max(0, width - padding * 2);
-    const maxH = Math.max(0, height - padding * 2);
-    let frameW = Math.min(maxW, 932);
-    let frameH = frameW / targetRatio;
-    if (frameH > maxH) {
-      frameH = maxH;
-      frameW = frameH * targetRatio;
-    }
-    return { width: frameW, height: frameH };
-  }, [height, width]);
+  const frame = useMemo(() => ({ width, height }), [height, width]);
 
   const rocketName = rocketNames[rocketId - 1] ?? "ROCKET";
   const logItems = updates.length

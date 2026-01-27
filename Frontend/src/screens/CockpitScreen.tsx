@@ -11,7 +11,7 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
-import { getAuthToken, getChart, getFlightStatus, getRockets, startFlight, syncFlight } from "../api/client";
+import { clearAuthSession, getAuthToken, getChart, getFlightStatus, getRockets, startFlight, syncFlight } from "../api/client";
 
 type Telemetry = {
   fuel?: number;
@@ -215,25 +215,18 @@ export default function CockpitScreen() {
   const fallbackData = useMemo(() => generateGsiData(40), []);
   const gsiData = chartValues.length ? chartValues : fallbackData;
 
-  const frame = useMemo(() => {
-    const targetRatio = 932 / 430;
-    const padding = 24;
-    const maxW = Math.max(0, width - padding * 2);
-    const maxH = Math.max(0, height - padding * 2);
-    let frameW = Math.min(maxW, 932);
-    let frameH = frameW / targetRatio;
-    if (frameH > maxH) {
-      frameH = maxH;
-      frameW = frameH * targetRatio;
-    }
-    return { width: frameW, height: frameH };
-  }, [height, width]);
+  const frame = useMemo(() => ({ width, height }), [height, width]);
 
-  const sidePanelWidth = Math.max(190, Math.min(frame.width * 0.3, 260));
+  const contentPaddingX = Math.max(10, Math.round(frame.width * 0.02));
+  const contentPaddingBottom = Math.max(10, Math.round(frame.height * 0.04));
+  const panelGap = Math.max(8, Math.round(frame.width * 0.02));
+  const contentWidth = Math.max(0, frame.width - contentPaddingX * 2);
+  const availableWidth = Math.max(0, contentWidth - panelGap * 2);
+  const sidePanelWidth = Math.round(availableWidth * 0.36);
+  const centerWidth = Math.max(0, availableWidth - sidePanelWidth * 2);
   const sidePanelHeight = Math.max(180, Math.min(frame.height * 0.55, 240));
-  const centerWidth = Math.max(150, Math.min(frame.width * 0.22, 190));
   const centerHeight = Math.max(230, Math.min(frame.height * 0.65, 300));
-  const chartWidth = Math.max(160, sidePanelWidth - 24);
+  const chartWidth = Math.max(0, sidePanelWidth - 24);
   const chartHeight = Math.max(90, Math.min(sidePanelHeight * 0.45, 120));
   const trackHeight = Math.max(120, Math.min(centerHeight * 0.6, 150));
   const handleHeight = 46;
@@ -605,6 +598,10 @@ export default function CockpitScreen() {
     await clearAuthSession();
     nav.reset({ index: 0, routes: [{ name: "Start" }] });
   }, [nav]);
+
+  const handleRestart = useCallback(() => {
+    nav.reset({ index: 0, routes: [{ name: "RocketSelect" }] });
+  }, [nav]);
   
   const handleConfirm = useCallback(async () => {
     setDecisionError("");
@@ -780,6 +777,17 @@ export default function CockpitScreen() {
               <Text style={s.finalTitle}>RESULT</Text>
               <Text style={s.finalScore}>{finalScoreLabel}</Text>
               <Text style={s.finalMessage}>{finalMessage}</Text>
+              <View style={s.finalActions}>
+                <Pressable style={({ pressed }) => [s.finalActionButton, pressed && s.finalActionPressed]} onPress={handleRestart}>
+                  <Text style={s.finalActionText}>RESTART</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [s.finalActionButton, s.finalActionButtonSecondary, pressed && s.finalActionPressed]}
+                  onPress={handleLogout}
+                >
+                  <Text style={s.finalActionText}>LOG OUT</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </View>
@@ -904,7 +912,7 @@ export default function CockpitScreen() {
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
         {windowLayer}
         {round === 1 && view === "cockpit" && phaseOneHintStep < PHASE_ONE_HINTS.length ? (
-          <View style={s.phaseOneHint}>
+          <View style={[s.phaseOneHint, { left: contentPaddingX, right: contentPaddingX }]}>
             <Text style={s.phaseOneHintText}>{PHASE_ONE_HINTS[phaseOneHintStep]}</Text>
             <Pressable
               style={({ pressed }) => [s.phaseOneHintButton, pressed && s.phaseOneHintButtonPressed]}
@@ -920,8 +928,8 @@ export default function CockpitScreen() {
           <View style={s.consoleGlow} />
         </View>
 
-        <View style={[s.content, { paddingTop: contentTop }]}>
-          <View style={s.panelRow}>
+        <View style={[s.content, { paddingTop: contentTop, paddingHorizontal: contentPaddingX, paddingBottom: contentPaddingBottom }]}>
+          <View style={[s.panelRow, { gap: panelGap }]}>
             <Pressable
               accessibilityRole="button"
               onPress={() => setView("chart")}
@@ -1261,6 +1269,18 @@ const s = StyleSheet.create({
   finalTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 16, letterSpacing: 1, marginBottom: 8 },
   finalScore: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 26, letterSpacing: 1, marginBottom: 10 },
   finalMessage: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center" },
+  finalActions: { flexDirection: "row", gap: 12, marginTop: 16 },
+  finalActionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorderStrong,
+    backgroundColor: "rgba(234,88,12,0.85)",
+  },
+  finalActionButtonSecondary: { backgroundColor: "rgba(0,0,0,0.35)", borderColor: theme.colors.accentBorderSoft },
+  finalActionPressed: { transform: [{ scale: 0.97 }] },
+  finalActionText: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 12, letterSpacing: 0.8 },
   finalPromptTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 18, lineHeight: 26, textAlign: "center" },
   finalPromptButton: {
     marginTop: 16,
