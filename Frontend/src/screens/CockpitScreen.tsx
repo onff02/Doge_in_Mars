@@ -182,10 +182,15 @@ export default function CockpitScreen() {
   const chartHeight = Math.max(90, Math.min(sidePanelHeight * 0.45, 120));
   const trackHeight = Math.max(120, Math.min(centerHeight * 0.6, 150));
   const handleHeight = 46;
-  const leverMargin = 10;
-  const leverRange = trackHeight - handleHeight - leverMargin * 2;
+  const leverTopMargin = 10;
+  const leverBottomMargin = 26;
+  const leverRange = trackHeight - handleHeight - leverTopMargin - leverBottomMargin;
   const handleBottom =
-    leverPosition === "up" ? leverMargin + leverRange : leverPosition === "down" ? leverMargin : leverMargin + leverRange / 2;
+    leverPosition === "up"
+      ? leverBottomMargin + leverRange
+      : leverPosition === "down"
+        ? leverBottomMargin
+        : leverBottomMargin + leverRange / 2;
   const leverRotation = "0deg";
   const swipeThreshold = 18;
   const contentTop = Math.max(12, frame.height * 0.16);
@@ -194,8 +199,7 @@ export default function CockpitScreen() {
   const showRoundCopy = round === 1;
   const finalScoreLabel = `${correctCount} / ${MAX_ROUNDS}`;
   const finalMessage = finalOutcomeKey ? FINAL_MESSAGES[finalOutcomeKey] : "";
-  const confirmDisabled = isConfirming;
-  const showConfirm = leverPosition !== "middle";
+  const confirmDisabled = isConfirming || leverPosition === "middle";
 
   const updateLeverPosition = useCallback(
     (next: "up" | "middle" | "down") => {
@@ -559,21 +563,19 @@ export default function CockpitScreen() {
                 {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
               </Text>
               <Text style={s.leverHint}>Swipe up or down</Text>
-              {showConfirm ? (
-                <View style={s.confirmDock}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      s.confirmButton,
-                      confirmDisabled && s.confirmDisabled,
-                      pressed && !confirmDisabled && s.confirmPressed,
-                    ]}
-                    onPress={handleConfirm}
-                    disabled={confirmDisabled}
-                  >
-                    <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
-                  </Pressable>
-                </View>
-              ) : null}
+              <View style={s.confirmDock}>
+                <Pressable
+                  style={({ pressed }) => [
+                    s.confirmButton,
+                    confirmDisabled && s.confirmDisabled,
+                    pressed && !confirmDisabled && s.confirmPressed,
+                  ]}
+                  onPress={handleConfirm}
+                  disabled={confirmDisabled}
+                >
+                  <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
+                </Pressable>
+              </View>
               {decisionError ? <Text style={s.decisionError}>{decisionError}</Text> : null}
             </View>
 
