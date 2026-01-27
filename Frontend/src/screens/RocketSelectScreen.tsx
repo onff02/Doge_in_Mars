@@ -167,19 +167,7 @@ export default function RocketSelectScreen() {
     };
   }, []);
 
-  const frame = useMemo(() => {
-    const targetRatio = DESIGN_FRAME.width / DESIGN_FRAME.height;
-    const padding = 24;
-    const maxW = Math.max(0, width - padding * 2);
-    const maxH = Math.max(0, height - padding * 2);
-    let frameW = Math.min(maxW, 932);
-    let frameH = frameW / targetRatio;
-    if (frameH > maxH) {
-      frameH = maxH;
-      frameW = frameH * targetRatio;
-    }
-    return { width: frameW, height: frameH };
-  }, [height, width]);
+  const frame = useMemo(() => ({ width, height }), [height, width]);
 
   const scale = Math.min(1, frame.width / DESIGN_FRAME.width, frame.height / DESIGN_FRAME.height);
   const ui = useMemo(() => {
@@ -259,14 +247,7 @@ export default function RocketSelectScreen() {
 
           <View style={[s.content, { padding: ui.contentPadding }]}>
             <View style={[s.header, { marginBottom: ui.headerMargin }]}>
-              <Pressable
-                style={({ pressed }) => [s.backButton, { paddingVertical: ui.backPadV, paddingHorizontal: ui.backPadH }, pressed && s.backPressed]}
-                onPress={() => nav.goBack()}
-              >
-                <Text style={[s.backText, { fontSize: ui.backFont }]} allowFontScaling={false}>
-                  {"< BACK"}
-                </Text>
-              </Pressable>
+              <View style={[s.headerSpacer, { width: ui.headerSpacer }]} />
               <Text style={[s.headerTitle, { fontSize: ui.titleFont, letterSpacing: ui.titleLetter }]} allowFontScaling={false}>
                 SELECT YOUR ROCKET
               </Text>

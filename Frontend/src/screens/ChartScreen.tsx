@@ -53,19 +53,7 @@ export default function ChartScreen({
   }, [round, symbol]);
 
   // 2. 프레임 레이아웃 계산 (제공해주신 로직 유지)
-  const frame = useMemo(() => {
-    const targetRatio = 932 / 430;
-    const padding = 24;
-    const maxW = Math.max(0, width - padding * 2);
-    const maxH = Math.max(0, height - padding * 2);
-    let frameW = Math.min(maxW, 932);
-    let frameH = frameW / targetRatio;
-    if (frameH > maxH) {
-      frameH = maxH;
-      frameW = frameH * targetRatio;
-    }
-    return { width: frameW, height: frameH };
-  }, [height, width]);
+  const frame = useMemo(() => ({ width, height }), [height, width]);
 
   const chartWidth = Math.max(240, Math.min(frame.width - 80, 680));
   const chartHeight = Math.max(160, Math.min(frame.height - 160, 260));
