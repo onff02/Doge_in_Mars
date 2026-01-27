@@ -44,13 +44,13 @@ const FINAL_MESSAGES: Record<FinalOutcomeKey, string> = {
   success2: "완벽한 연료 사용에 성공한 도지는 화성에서 도지시티 건설에 성공하여 세를 키웠고 지구를 침공했습니다.",
 };
 
-const ROUND_ANSWERS: Record<number, LeverChoice> = {
-  1: "up",
-  2: "down",
-  3: "up",
-  4: "down",
-  5: "up",
-  6: "down",
+const ROUND_ANSWERS: Record<number, { [key: string]: LeverChoice; default: LeverChoice }> = {
+  1: { NVDA: "down", AAPL: "down", KO: "up", default: "down" },
+  2: { NVDA: "down", AAPL: "up", KO: "up", default: "up" },
+  3: { default: "up" },
+  4: { NVDA: "up", AAPL: "down", KO: "down", default: "down" },
+  5: { default: "down" },
+  6: { NVDA: "up", AAPL: "up", KO: "up", default: "up" },
 };
 
 const PHASE_INTROS: Record<number, { title: string; lines: string[] }> = {
@@ -98,8 +98,7 @@ const PHASE_ONE_HINTS = [
   "도지가 무사히 화성에 도착할 수 있게 도와주세요!",
 ];
 
-const BG_IMAGE =
-  "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
+const BG_IMAGE = require("../../assets/cockpit.png");
 const MAX_ROUNDS = 6;
 
 function generateGsiData(points: number) {
@@ -218,26 +217,37 @@ export default function CockpitScreen() {
   const frame = useMemo(() => ({ width, height }), [height, width]);
 
   const contentPaddingX = Math.max(10, Math.round(frame.width * 0.02));
-  const contentPaddingBottom = Math.max(10, Math.round(frame.height * 0.04));
-  const panelGap = Math.max(8, Math.round(frame.width * 0.02));
-  const contentWidth = Math.max(0, frame.width - contentPaddingX * 2);
-  const availableWidth = Math.max(0, contentWidth - panelGap * 2);
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-  let sidePanelWidth = clamp(Math.round(availableWidth * 0.3), 150, 230);
-  let centerWidth = clamp(Math.round(availableWidth * 0.22), 140, 190);
-  let updatesPanelWidth = clamp(Math.round(availableWidth * 0.2), 120, 180);
-  const totalPanelWidth = sidePanelWidth + centerWidth + updatesPanelWidth;
-  const maxPanelWidth = Math.max(0, availableWidth - panelGap * 2);
-  if (totalPanelWidth > maxPanelWidth && totalPanelWidth > 0) {
-    const scale = maxPanelWidth / totalPanelWidth;
-    sidePanelWidth = Math.max(120, Math.round(sidePanelWidth * scale));
-    centerWidth = Math.max(120, Math.round(centerWidth * scale));
-    updatesPanelWidth = Math.max(100, Math.round(updatesPanelWidth * scale));
-  }
-  const sidePanelHeight = Math.max(160, Math.min(frame.height * 0.5, 210));
-  const centerHeight = Math.max(210, Math.min(frame.height * 0.58, 260));
-  const chartWidth = Math.max(0, sidePanelWidth - 24);
-  const chartHeight = Math.max(90, Math.min(sidePanelHeight * 0.45, 120));
+  const screenWidth = clamp(Math.round(frame.width * 0.22), 160, Math.round(frame.width * 0.28));
+  const screenHeight = clamp(Math.round(frame.height * 0.16), 115, Math.round(frame.height * 0.22));
+  
+  // 1. screenTop 위치를 약간 아래로 조정 (사진상 검정 칸 위치)
+  const screenTop = clamp(Math.round(frame.height * 0.65), 0, frame.height - screenHeight - 10);
+  
+  // 2. 화면 안쪽으로 더 들어오도록 screenInsetX 조정
+  const screenInsetX = clamp(Math.round(frame.width * 0.18), 35, Math.round(frame.width * 0.25));
+  
+  const screenPad = clamp(Math.round(screenWidth * 0.06), 10, 18);
+  const screenInnerWidth = Math.max(0, screenWidth - screenPad * 2);
+  const screenInnerHeight = Math.max(0, screenHeight - screenPad * 2);
+  const chartPanelWidth = Math.round(screenInnerWidth * 0.9);
+  const chartPanelOffset = Math.max(0, screenInnerWidth - chartPanelWidth);
+  
+  // 3. 미세 조정을 위한 Offset 값 변경
+  const screenOffsetX = Math.round(frame.width * 0.01); // 수평 중앙 정렬 최적화
+  const screenOffsetY = Math.round(frame.height * 0.04); // 수직 정렬 최적화
+  
+  const screenTopInner = screenTop + screenPad - screenOffsetY;
+  const leftScreenX = screenInsetX + screenPad - screenOffsetX + 6 + chartPanelOffset; // 오른쪽 끝 고정 + 너비 축소
+  const rightScreenX = Math.round(frame.width - screenInsetX - screenWidth + screenPad + screenOffsetX);
+  const leverWidth = clamp(Math.round(frame.width * 0.17), 120, 200);
+  const centerHeight = clamp(Math.round(frame.height * 0.28), 200, 300);
+  const leverTop = clamp(Math.round(screenTop - frame.height * 0.03), 0, frame.height - centerHeight - 16);
+  const leverLeft = Math.round((frame.width - leverWidth) / 2);
+  const sidePanelWidth = chartPanelWidth;
+  const updatesPanelWidth = screenInnerWidth;
+  const chartWidth = Math.max(0, sidePanelWidth - 8);
+  const chartHeight = Math.max(60, Math.min(screenInnerHeight - 52, screenInnerHeight * 0.48));
   const trackHeight = Math.max(110, Math.min(centerHeight * 0.58, 140));
   const handleHeight = 40;
   const leverTopMargin = 10;
@@ -251,7 +261,6 @@ export default function CockpitScreen() {
         : leverBottomMargin + leverRange / 2;
   const leverRotation = "0deg";
   const swipeThreshold = 18;
-  const contentTop = Math.max(12, frame.height * 0.16);
   const phaseIntro = PHASE_INTROS[round] ?? { title: `Phase ${round}`, lines: [] };
   const phaseLabel = `Phase ${round}: ${phaseIntro.title}`;
   const phaseCopy = phaseIntro.lines.join("\n");
@@ -650,7 +659,7 @@ export default function CockpitScreen() {
       chartCursor.current = Math.min(index + 1, chartValues.length - 1);
       setLeverPosition("middle");
       const nextRound = Math.min(round + 1, MAX_ROUNDS);
-      const correctDirection = ROUND_ANSWERS[round] ?? "up";
+      const correctDirection = ROUND_ANSWERS[round]?.[symbol] ?? ROUND_ANSWERS[round]?.default ?? "up";
       const isCorrect = chosenDirection === correctDirection;
       const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
       setCorrectCount(nextCorrectCount);
@@ -817,32 +826,17 @@ export default function CockpitScreen() {
   const panelUpdates = updates.slice(0, 5);
   const windowLayer = (
     <View style={s.window} pointerEvents="none">
-      <ImageBackground source={{ uri: BG_IMAGE }} style={StyleSheet.absoluteFillObject} resizeMode="cover">
+      <ImageBackground source={BG_IMAGE} style={StyleSheet.absoluteFillObject} resizeMode="stretch">
         <View style={s.windowOverlay} />
-        <View style={s.windowAurora} />
-        <View style={s.windowAuroraAlt} />
-        <View style={s.windowVignette} />
       </ImageBackground>
       <View style={s.glassSheen} />
       <View style={s.glassSheenSecondary} />
       <View style={s.windowRim} />
     </View>
   );
-  const cockpitFrameLayer = (
-    <View style={s.windowFrame} pointerEvents="none">
-      <View style={s.frameBeamTop} />
-      <View style={s.frameBeamBottom} />
-      <View style={s.frameBeamLeft} />
-      <View style={s.frameBeamRight} />
-      <View style={[s.frameStrut, s.frameStrutLeft]} />
-      <View style={[s.frameStrut, s.frameStrutRight]} />
-      <View style={[s.frameStrut, s.frameStrutCenter]} />
-      <View style={s.hudRingOuter} />
-      <View style={s.hudRingInner} />
-      <View style={[s.hudCorner, s.hudCornerTL]} />
-      <View style={[s.hudCorner, s.hudCornerTR]} />
-      <View style={[s.hudCorner, s.hudCornerBL]} />
-      <View style={[s.hudCorner, s.hudCornerBR]} />
+  const cockpitWindowLayer = (
+    <View style={s.window} pointerEvents="none">
+      <ImageBackground source={BG_IMAGE} style={StyleSheet.absoluteFillObject} resizeMode="stretch" />
     </View>
   );
 
@@ -1040,8 +1034,7 @@ export default function CockpitScreen() {
   return (
       <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
-        {windowLayer}
-        {cockpitFrameLayer}
+        {cockpitWindowLayer}
         {round === 1 && view === "cockpit" && phaseOneHintStep < PHASE_ONE_HINTS.length ? (
           <View style={[s.phaseOneHint, { left: contentPaddingX, right: contentPaddingX }]}>
             <Text style={s.phaseOneHintText}>{PHASE_ONE_HINTS[phaseOneHintStep]}</Text>
@@ -1054,23 +1047,18 @@ export default function CockpitScreen() {
           </View>
         ) : null}
 
-        <View style={s.console} pointerEvents="none">
-          <View style={s.consoleEdge} />
-          <View style={s.consoleGlow} />
-        </View>
-
-        <View style={[s.content, { paddingTop: contentTop, paddingHorizontal: contentPaddingX, paddingBottom: contentPaddingBottom }]}>
-          <View style={[s.panelRow, { gap: panelGap }]}>
+        <View style={s.content}>
+          <View style={s.panelStage}>
             <Pressable
               accessibilityRole="button"
               onPress={() => setView("chart")}
               style={({ pressed }) => [
                 s.sidePanel,
-                { width: sidePanelWidth, height: sidePanelHeight },
+                { width: sidePanelWidth, height: screenInnerHeight, left: leftScreenX, top: screenTopInner },
                 pressed && s.panelPressed,
               ]}
             >
-              <Text style={s.panelTitle}>TRAJECTORY CHART</Text>
+              <Text style={s.panelTitle}>GSI CHART</Text>
               <View style={s.chartWindow}>
                 <TrajectoryGSIChart data={gsiData} width={chartWidth} height={chartHeight} />
               </View>
@@ -1082,9 +1070,7 @@ export default function CockpitScreen() {
               <Text style={s.panelHint}>Tap to expand</Text>
             </Pressable>
 
-            <View style={[s.leverPanel, { width: centerWidth, height: centerHeight }]}>
-              <Text style={s.panelTitle}>CONTROL LEVER</Text>
-              <Text style={s.roundBadge}>{`PHASE ${round} / ${MAX_ROUNDS}`}</Text>
+            <View style={[s.leverPanel, { width: leverWidth, height: centerHeight, left: leverLeft, top: leverTop }]}>
               <View style={[s.leverWell, { height: trackHeight + 34 }]}>
                 <View style={[s.leverTrack, { height: trackHeight }]} />
                 <View style={[s.leverStop, { top: 10 }]} />
@@ -1110,12 +1096,6 @@ export default function CockpitScreen() {
                   <Text style={s.confirmText}>{isConfirming ? "CONFIRMING..." : "CONFIRM"}</Text>
                 </Pressable>
               </View>
-              <View style={s.leverStatusWrap} pointerEvents="none">
-                <Text style={s.leverState}>
-                  {leverPosition === "up" ? "THRUST UP" : leverPosition === "down" ? "THRUST DOWN" : "THRUST HOLD"}
-                </Text>
-                <Text style={s.leverHint}>Swipe up or down</Text>
-              </View>
               {decisionError ? <Text style={s.decisionError}>{decisionError}</Text> : null}
             </View>
 
@@ -1126,7 +1106,7 @@ export default function CockpitScreen() {
                 s.sidePanel,
                 s.sidePanelTight,
                 s.sidePanelRightTight,
-                { width: updatesPanelWidth, height: sidePanelHeight },
+                { width: updatesPanelWidth, height: screenInnerHeight, left: rightScreenX, top: screenTopInner },
                 pressed && s.panelPressed,
               ]}
             >
@@ -1160,7 +1140,7 @@ const s = StyleSheet.create({
   outcomeVideo: { ...StyleSheet.absoluteFillObject },
   outcomeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.25)" },
   window: { ...StyleSheet.absoluteFillObject },
-  windowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
+  windowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.12)" },
   windowAurora: {
     position: "absolute",
     width: "140%",
@@ -1462,25 +1442,8 @@ const s = StyleSheet.create({
     left: "14%",
     backgroundColor: "rgba(255,255,255,0.7)",
   },
-  console: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "42%",
-    backgroundColor: "rgba(32,32,32,0.92)",
-  },
-  consoleEdge: { position: "absolute", top: 0, left: 0, right: 0, height: 2, backgroundColor: "rgba(251,191,36,0.22)" },
-  consoleGlow: {
-    position: "absolute",
-    top: -18,
-    left: 0,
-    right: 0,
-    height: 24,
-    backgroundColor: "rgba(251,191,36,0.08)",
-  },
-  content: { flex: 1, paddingHorizontal: 18, paddingBottom: 18, justifyContent: "flex-end" },
-  panelRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 14 },
+  content: { ...StyleSheet.absoluteFillObject },
+  panelStage: { flex: 1 },
   roundContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   finalContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   finalPromptContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
@@ -1558,44 +1521,35 @@ const s = StyleSheet.create({
   roundButtonPressed: { transform: [{ scale: 0.97 }] },
   roundButtonText: { color: theme.colors.textPrimary, fontWeight: "900", letterSpacing: 1 },
   sidePanel: {
-    backgroundColor: "rgba(10,14,22,0.82)",
+    position: "absolute",
+    backgroundColor: "transparent",
     borderRadius: theme.radius.lg,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.45)",
-    shadowColor: "#fbbf24",
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    padding: 6,
+    borderWidth: 0,
+    overflow: "hidden",
   },
   panelPressed: { transform: [{ scale: 0.98 }] },
-  sidePanelTight: { padding: 8 },
+  sidePanelTight: { padding: 4 },
   sidePanelRightTight: { paddingRight: 0 },
-  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 13, letterSpacing: 1.1, marginBottom: 8 },
-  panelTitleTight: { marginBottom: 4 },
-  chartWindow: { borderRadius: theme.radius.md, padding: 6, backgroundColor: "rgba(0,0,0,0.35)" },
-  panelMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
-  statusDot: { width: 6, height: 6, borderRadius: 999 },
-  panelMetaText: { color: theme.colors.textMuted, fontSize: 11 },
-  errorText: { color: theme.colors.danger, fontSize: 10, marginTop: 6 },
-  panelHint: { color: theme.colors.textHint, fontSize: 10, marginTop: "auto", letterSpacing: 0.4 },
-  panelHintCompact: { marginTop: 6 },
+  panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 10, letterSpacing: 1, marginBottom: 2 },
+  panelTitleTight: { marginBottom: 2 },
+  chartWindow: { borderRadius: theme.radius.md, padding: 3, backgroundColor: "rgba(0,0,0,0.35)" },
+  panelMeta: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 3 },
+  statusDot: { width: 3, height: 3, borderRadius: 999 },
+  panelMetaText: { color: theme.colors.textMuted, fontSize: 8 },
+  errorText: { color: theme.colors.danger, fontSize: 8, marginTop: 3 },
+  panelHint: { color: theme.colors.textHint, fontSize: 8, marginTop: 3, letterSpacing: 0.2 },
+  panelHintCompact: { marginTop: 4 },
   leverPanel: {
-    backgroundColor: "rgba(8,12,20,0.86)",
+    position: "absolute",
+    backgroundColor: "transparent",
     borderRadius: theme.radius.lg,
-    padding: 12,
+    paddingHorizontal: 8,
+    paddingTop: 8,
     paddingBottom: 54,
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.5)",
+    borderWidth: 0,
     alignItems: "center",
-    shadowColor: "#fb923c",
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
   },
-  roundBadge: { color: theme.colors.textAccentStrong, fontSize: 12, letterSpacing: 0.8, marginBottom: 6 },
   leverWell: { width: 72, alignItems: "center", justifyContent: "center", position: "relative", marginTop: 4 },
   leverTrack: {
     position: "absolute",
@@ -1642,15 +1596,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.3)",
   },
-  leverStatusWrap: {
-    position: "absolute",
-    right: 10,
-    top: "40%",
-    alignItems: "flex-start",
-    gap: 2,
-  },
-  leverState: { color: theme.colors.textAccentStrong, fontSize: 11, letterSpacing: 0.6 },
-  leverHint: { color: theme.colors.textHint, fontSize: 9 },
   confirmDock: { position: "absolute", left: 0, right: 0, bottom: 12, alignItems: "center" },
   confirmButton: {
     paddingVertical: 8,
@@ -1664,8 +1609,8 @@ const s = StyleSheet.create({
   confirmDisabled: { opacity: 0.4 },
   confirmText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 12, letterSpacing: 0.8 },
   decisionError: { marginTop: 6, color: theme.colors.warning, fontSize: 10, textAlign: "center" },
-  updateList: { gap: 6, marginTop: 2, paddingRight: 0 },
-  updateRow: { flexDirection: "row", gap: 6, alignItems: "center" },
-  updateDot: { width: 5, height: 5, borderRadius: 999 },
-  updateTimeOnly: { color: theme.colors.textAccent, fontSize: 11, letterSpacing: 0.5 },
+  updateList: { gap: 3, marginTop: 2, paddingRight: 0 },
+  updateRow: { flexDirection: "row", gap: 3, alignItems: "center" },
+  updateDot: { width: 3, height: 3, borderRadius: 999 },
+  updateTimeOnly: { color: theme.colors.textAccent, fontSize: 9, letterSpacing: 0.3 },
 });

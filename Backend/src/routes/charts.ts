@@ -8,7 +8,7 @@ const yahooFinance = new YahooFinance();
 // 1. 라운드별 실제 역사적 경제 사건 시기 설정
 const ROUND_PERIODS: Record<number, { start: string; end: string; trend: 'bull' | 'bear' | 'volatile' }> = {
   1: { start: '2008-01-01', end: '2008-08-31', trend: 'bear' },     // 리먼 브라더스 사태 (Bear Trap)
-  2: { start: '2017-06-01', end: '2017-12-31', trend: 'volatile' }, // 미중 무역전쟁 및 암호화폐 폭락
+  2: { start: '2018-05-01', end: '2018-10-31', trend: 'volatile' }, // 미중 무역전쟁 및 암호화폐 폭락
   3: { start: '2020-01-01', end: '2020-03-20', trend: 'bull' },     // 팬데믹 이후 불장 (Bull Run)
   4: { start: '2022-06-01', end: '2022-12-31', trend: 'bull' },     // AI 열풍 및 규제 이슈
   5: { start: '2021-05-01', end: '2021-12-31', trend: 'bear' },     // 금리 인상 및 거품 붕괴 (Bubble Burst)
@@ -86,7 +86,7 @@ async function getHistoricalChartData(symbol: string, round: number): Promise<Ch
   const period = ROUND_PERIODS[round] || ROUND_PERIODS[6];
   
   try {
-    const results = await yahooFinance.historical(symbol, {
+    const results = await yahooFinance.chart(symbol, {
       period1: period.start,
       period2: period.end,
       interval: '1d', // 일봉 데이터
