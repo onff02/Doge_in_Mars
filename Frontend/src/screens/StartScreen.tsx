@@ -6,7 +6,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import type { RootStackParamList } from "../navigation";
 import { Spaceship } from "../components/Spaceship";
 import { theme } from "../theme";
-import { clearAuthSession, getAuthToken, getAuthUser } from "../api/client";
+import { resetFlight, clearAuthSession, getAuthToken, getAuthUser } from "../api/client";
 
 const STAR_COUNT = 20;
 const BG_IMAGE =
@@ -60,6 +60,20 @@ export default function StartScreen() {
   const hint = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    const clearSessionOnEntry = async () => {
+      const token = await getAuthToken();
+      if (token) {
+        try {
+          // 초기 화면 진입 시 로그인 정보는 놔두고 비행 데이터만 리셋
+          await resetFlight();
+          console.log("Game session reset complete.");
+        } catch (e) {
+          console.error("Failed to reset session:", e);
+        }
+      }
+    };
+    clearSessionOnEntry();
+
     const twinkleAnims = twinkles.map((value, i) =>
       Animated.loop(
         Animated.sequence([

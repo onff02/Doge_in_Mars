@@ -101,6 +101,14 @@ export type FlightStartResponse = {
   message: string;
 };
 
+export async function resetFlight(): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>("/api/flight/reset", { 
+    method: "POST", 
+    auth: true,
+    body: {} 
+  });
+}
+
 export type FlightSyncResponse = {
   currentFuel: number;
   currentHull: number;
