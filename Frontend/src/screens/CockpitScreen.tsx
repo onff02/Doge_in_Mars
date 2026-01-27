@@ -10,7 +10,7 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
-import { getAuthToken, getChart, getFlightStatus, startFlight, syncFlight } from "../api/client";
+import { getAuthToken, getChart, getFlightStatus, getRockets, startFlight, syncFlight } from "../api/client";
 
 type Telemetry = {
   fuel?: number;
@@ -143,7 +143,7 @@ export default function CockpitScreen() {
   const [telemetry, setTelemetry] = useState<Telemetry>({});
   const [chartValues, setChartValues] = useState<number[]>([]);
   const [stabilityValues, setStabilityValues] = useState<number[]>([]);
-  const [symbol, setSymbol] = useState("AAPL");
+  const [symbol, setSymbol] = useState("");
   const [error, setError] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -245,11 +245,16 @@ export default function CockpitScreen() {
       }
 
       try {
+        // Get rocket info to determine the symbol (rocket name = symbol)
+        const { rockets } = await getRockets();
+        const currentRocket = rockets.find((r) => r.id === rocketId);
+        const rocketSymbol = currentRocket?.name || "AAPL";
+
         const status = await getFlightStatus();
-        let activeSymbol = symbol;
+        let activeSymbol = rocketSymbol;
 
         if (status.activeSession) {
-          activeSymbol = status.activeSession.symbol || symbol;
+          activeSymbol = status.activeSession.symbol || rocketSymbol;
           if (isMounted) {
             setSymbol(activeSymbol);
             setTelemetry({
@@ -259,8 +264,8 @@ export default function CockpitScreen() {
             });
           }
         } else {
-          const start = await startFlight({ rocketId, symbol });
-          activeSymbol = start.session.symbol || symbol;
+          const start = await startFlight({ rocketId, symbol: rocketSymbol });
+          activeSymbol = start.session.symbol || rocketSymbol;
           if (isMounted) {
             const progress = (start.session.distance / start.session.targetDistance) * 100;
             setSymbol(activeSymbol);
@@ -297,7 +302,7 @@ export default function CockpitScreen() {
     return () => {
       isMounted = false;
     };
-  }, [rocketId, symbol, round]);
+  }, [rocketId, round]);
 
   const handleOutcomeEnd = useCallback(() => {
     if (pendingFinalKey) {
