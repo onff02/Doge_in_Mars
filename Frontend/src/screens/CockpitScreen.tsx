@@ -91,6 +91,13 @@ const STAR_POSITIONS = [
   { top: "42%", left: "70%", size: 3 },
 ];
 
+const PHASE_ONE_HINTS = [
+  "좌측엔 어제까지의 중력장 안정도 차트가 표시됩니다. 클릭하면 확대해서 볼 수 있습니다.",
+  "우측엔 운항에 필요한 정보 게시판이 있습니다. 클릭하면 확대해서 볼 수 있습니다.",
+  "가운데 레버를 올리거나 내려서 연료 소모량을 결정합니다. 오직 2가지 선택지만 있으며, 둘 중 하나가 정답입니다.",
+  "도지가 무사히 화성에 도착할 수 있게 도와주세요!",
+];
+
 const BG_IMAGE =
   "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
 const MAX_ROUNDS = 6;
@@ -194,6 +201,7 @@ export default function CockpitScreen() {
   const [pendingRound, setPendingRound] = useState<number | null>(null);
   const [pendingFinalKey, setPendingFinalKey] = useState<FinalOutcomeKey | null>(null);
   const chartCursor = useRef(1);
+  const [phaseOneHintStep, setPhaseOneHintStep] = useState(0);
   const blackHolePulse = useRef(new Animated.Value(0)).current;
   const shakePulse = useRef(new Animated.Value(0)).current;
   const twinkleA = useRef(new Animated.Value(0)).current;
@@ -433,6 +441,12 @@ export default function CockpitScreen() {
       isMounted = false;
     };
   }, [rocketId, symbol, round]);
+
+  useEffect(() => {
+    if (round !== 1) {
+      setPhaseOneHintStep(0);
+    }
+  }, [round]);
 
   useEffect(() => {
     if (view === "round" && round === 1) {
@@ -889,11 +903,15 @@ export default function CockpitScreen() {
       <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
         {windowLayer}
-        {round === 1 ? (
-          <View style={s.phaseOneHint} pointerEvents="none">
-            <Text style={s.phaseOneHintText}>
-              좌측의 차트와 우측의 정보를 바탕으로 도지가 안전하게 화성에 도착하게 해주세요.
-            </Text>
+        {round === 1 && view === "cockpit" && phaseOneHintStep < PHASE_ONE_HINTS.length ? (
+          <View style={s.phaseOneHint}>
+            <Text style={s.phaseOneHintText}>{PHASE_ONE_HINTS[phaseOneHintStep]}</Text>
+            <Pressable
+              style={({ pressed }) => [s.phaseOneHintButton, pressed && s.phaseOneHintButtonPressed]}
+              onPress={() => setPhaseOneHintStep((prev) => Math.min(prev + 1, PHASE_ONE_HINTS.length))}
+            >
+              <Text style={s.phaseOneHintButtonText}>확인</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -1035,6 +1053,7 @@ const s = StyleSheet.create({
     right: 24,
     paddingVertical: 8,
     paddingHorizontal: 12,
+    paddingRight: 56,
     borderRadius: theme.radius.md,
     backgroundColor: "rgba(4,7,14,0.6)",
     borderWidth: 1,
@@ -1042,10 +1061,23 @@ const s = StyleSheet.create({
   },
   phaseOneHintText: {
     color: theme.colors.textPrimary,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 19,
     textAlign: "center",
   },
+  phaseOneHintButton: {
+    position: "absolute",
+    right: 10,
+    bottom: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorderStrong,
+    backgroundColor: "rgba(234,88,12,0.7)",
+  },
+  phaseOneHintButtonPressed: { transform: [{ scale: 0.97 }] },
+  phaseOneHintButtonText: { color: theme.colors.textPrimary, fontWeight: "800", fontSize: 10, letterSpacing: 0.5 },
   roundBackground: { ...StyleSheet.absoluteFillObject },
   blackHoleLayer: {
     position: "absolute",
