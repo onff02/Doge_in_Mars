@@ -53,6 +53,33 @@ const ROUND_ANSWERS: Record<number, LeverChoice> = {
   6: "down",
 };
 
+const PHASE_INTROS: Record<number, { title: string; lines: string[] }> = {
+  1: {
+    title: "리먼 블랙홀",
+    lines: ["전방에 거대한 블랙홀이 형성되었습니다.", "튼튼한 우주선은 버틸 수 있을까요?"],
+  },
+  2: {
+    title: "변동성의 소음",
+    lines: ["중력파가 무작위로 요동치고 있습니다.", "패닉 속에서 방향을 읽을 수 있습니까?"],
+  },
+  3: {
+    title: "불항성류 진입",
+    lines: ["모든 중력장이 추진에 우호적입니다.", "하지만 과도한 출력이 과연 정답일까요?"],
+  },
+  4: {
+    title: "규제 신호",
+    lines: ["NASA로부터 규제 신호가 도착했습니다.", "규제에 대한 순응과 혁신, 무엇을 택하겠습니까?"],
+  },
+  5: {
+    title: "시공간 반전 구역",
+    lines: ["시공간이 반전되었습니다.", "도지의 우주선이 화성을 향하고 있을까요?"],
+  },
+  6: {
+    title: "마지막 선택",
+    lines: ["우주는 이상하리만큼 평화롭습니다.", "과연 당신의 선택도 쉬울까요?"],
+  },
+};
+
 const BG_IMAGE =
   "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
 const MAX_ROUNDS = 6;
@@ -137,9 +164,9 @@ export default function CockpitScreen() {
   const startInRound = route.params?.startInRound ?? false;
   const initialRound = route.params?.round ?? 1;
   const { width, height } = useWindowDimensions();
-  const [view, setView] = useState<"cockpit" | "chart" | "info" | "round" | "outcome" | "final" | "finalResult">(
-    startInRound ? "round" : "cockpit"
-  );
+  const [view, setView] = useState<
+    "cockpit" | "chart" | "info" | "round" | "outcome" | "finalPrompt" | "final" | "finalResult"
+  >(startInRound ? "round" : "cockpit");
   const [round, setRound] = useState(() => Math.min(Math.max(initialRound, 1), MAX_ROUNDS));
   const [leverPosition, setLeverPosition] = useState<"up" | "middle" | "down">("middle");
   const [telemetry, setTelemetry] = useState<Telemetry>({});
@@ -194,9 +221,9 @@ export default function CockpitScreen() {
   const leverRotation = "0deg";
   const swipeThreshold = 18;
   const contentTop = Math.max(12, frame.height * 0.16);
-  const roundLabel = `ROUND ${round}`;
-  const roundCopy = "중력장 안정도 차트와 최신 정보를 바탕으로 연료 소모량을 결정하세요!";
-  const showRoundCopy = round === 1;
+  const phaseIntro = PHASE_INTROS[round] ?? { title: `Phase ${round}`, lines: [] };
+  const phaseLabel = `Phase ${round}: ${phaseIntro.title}`;
+  const phaseCopy = phaseIntro.lines.join("\n");
   const finalScoreLabel = `${correctCount} / ${MAX_ROUNDS}`;
   const finalMessage = finalOutcomeKey ? FINAL_MESSAGES[finalOutcomeKey] : "";
   const confirmDisabled = isConfirming || leverPosition === "middle";
@@ -316,7 +343,7 @@ export default function CockpitScreen() {
       setPendingFinalKey(null);
       setOutcomeKey(null);
       setPendingRound(null);
-      setView("final");
+      setView("finalPrompt");
       return;
     }
     setOutcomeKey(null);
@@ -407,7 +434,7 @@ export default function CockpitScreen() {
     }
     items.push({
       time: "00:34",
-      message: `Round ${round} / ${MAX_ROUNDS} briefing active`,
+      message: `Phase ${round} / ${MAX_ROUNDS} briefing active`,
       tone: "info",
     });
     items.push({
@@ -477,6 +504,27 @@ export default function CockpitScreen() {
     );
   }
 
+  if (view === "finalPrompt" && finalOutcomeKey) {
+    return (
+      <View style={s.root}>
+        <View style={[s.frame, { width: frame.width, height: frame.height }]}>
+          {windowLayer}
+          <View style={s.finalPromptContent}>
+            <View style={s.finalPromptCard}>
+              <Text style={s.finalPromptTitle}>과연 도지는 화성에 안전하게 도착했을까요?</Text>
+              <Pressable
+                style={({ pressed }) => [s.finalPromptButton, pressed && s.finalPromptButtonPressed]}
+                onPress={() => setView("final")}
+              >
+                <Text style={s.finalPromptButtonText}>결과 확인하기</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   if (view === "finalResult" && finalOutcomeKey) {
     return (
       <View style={s.root}>
@@ -501,8 +549,8 @@ export default function CockpitScreen() {
           {windowLayer}
           <View style={s.roundContent}>
             <View style={s.roundCard}>
-              <Text style={s.roundEyebrow}>{roundLabel}</Text>
-              {showRoundCopy ? <Text style={s.roundCopy}>{roundCopy}</Text> : null}
+              <Text style={s.roundEyebrow}>{phaseLabel}</Text>
+              {phaseCopy ? <Text style={s.roundCopy}>{phaseCopy}</Text> : null}
               <Pressable style={({ pressed }) => [s.roundButton, pressed && s.roundButtonPressed]} onPress={() => setView("cockpit")}>
                 <Text style={s.roundButtonText}>GO!</Text>
               </Pressable>
@@ -548,7 +596,7 @@ export default function CockpitScreen() {
 
             <View style={[s.leverPanel, { width: centerWidth, height: centerHeight }]}>
               <Text style={s.panelTitle}>CONTROL LEVER</Text>
-              <Text style={s.roundBadge}>{`ROUND ${round} / ${MAX_ROUNDS}`}</Text>
+              <Text style={s.roundBadge}>{`PHASE ${round} / ${MAX_ROUNDS}`}</Text>
               <View style={[s.leverWell, { height: trackHeight + 34 }]}>
                 <View style={[s.leverTrack, { height: trackHeight }]} />
                 <View style={[s.leverStop, { top: 10 }]} />
@@ -670,6 +718,7 @@ const s = StyleSheet.create({
   panelRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 14 },
   roundContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   finalContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  finalPromptContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   roundCard: {
     width: "80%",
     maxWidth: 420,
@@ -692,12 +741,35 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.4)",
     alignItems: "center",
   },
+  finalPromptCard: {
+    width: "82%",
+    maxWidth: 460,
+    backgroundColor: "rgba(12,17,29,0.8)",
+    borderRadius: theme.radius.lg,
+    paddingVertical: 22,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.4)",
+    alignItems: "center",
+  },
   roundEyebrow: { color: theme.colors.accent, fontWeight: "800", fontSize: 18, letterSpacing: 1, marginBottom: 8 },
   roundTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 20, marginBottom: 8 },
   roundCopy: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center", marginBottom: 16 },
   finalTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 16, letterSpacing: 1, marginBottom: 8 },
   finalScore: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 26, letterSpacing: 1, marginBottom: 10 },
   finalMessage: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center" },
+  finalPromptTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 18, lineHeight: 26, textAlign: "center" },
+  finalPromptButton: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: theme.radius.pill,
+    backgroundColor: "rgba(234,88,12,0.8)",
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorderStrong,
+  },
+  finalPromptButtonPressed: { transform: [{ scale: 0.97 }] },
+  finalPromptButtonText: { color: theme.colors.textPrimary, fontWeight: "900", letterSpacing: 0.8 },
   roundButton: {
     paddingVertical: 10,
     paddingHorizontal: 26,
