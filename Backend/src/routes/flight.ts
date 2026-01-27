@@ -112,31 +112,17 @@ export async function flightRoutes(fastify: FastifyInstance) {
    * 새 게임 시작: 기존 항해 데이터를 초기화하고 유저를 인트로/로켓 선택 단계로 되돌립니다
    */
   fastify.post('/reset', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { userId } = request.user;
+    const { userId } = request.user;
 
-      // 진행 중인 세션을 FAILED로 변경
-      await prisma.flightSession.updateMany({
-        where: {
-          userId,
-          status: 'IN_PROGRESS',
-        },
-        data: {
-          status: 'FAILED',
-        },
-      });
+  // 진행 중인 세션을 찾아 삭제하거나 상태 변경
+    await prisma.flightSession.deleteMany({
+      where: {
+        userId,
+        status: 'IN_PROGRESS',
+      },
+    });
 
-      return reply.send({
-        success: true,
-        message: '게임이 초기화되었습니다. 새로운 항해를 시작하세요!',
-      });
-    } catch (error) {
-      console.error('Reset error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: '서버 오류가 발생했습니다.',
-      });
-    }
+    return { success: true, message: "비행 데이터가 초기화되었습니다." };
   });
 
   /**

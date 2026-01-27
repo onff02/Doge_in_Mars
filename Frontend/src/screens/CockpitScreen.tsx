@@ -11,7 +11,7 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
-import { clearAuthSession, getAuthToken, getChart, getFlightStatus, getRockets, startFlight, syncFlight } from "../api/client";
+import { clearAuthSession, getChart, getFlightStatus, getRockets, startFlight, syncFlight, resetFlight } from "../api/client";
 
 type Telemetry = {
   fuel?: number;
@@ -314,9 +314,18 @@ export default function CockpitScreen() {
         let activeSymbol = rocketName;
 
         if (status.activeSession) {
-          activeSymbol = status.activeSession.symbol;
+        // 진행 중인 세션의 로켓 ID와 현재 선택한 rocketId가 다른 경우
+          if (status.activeSession.rocket.id !== rocketId) {
+            console.log("로켓이 변경되었습니다. 기존 세션을 초기화하고 새로 시작합니다.");
+            await resetFlight(); // 기존 애플 세션 삭제
+            const start = await startFlight({ rocketId, symbol: rocketName }); // 코카콜라 세션 생성
+            activeSymbol = start.session.symbol;
+          } else {
+            // 로켓이 같으면 기존 세션 유지 (이어하기)
+            activeSymbol = status.activeSession.symbol;
+          }
         } else {
-          // 세션이 없으면 새로 시작
+          // 세션이 아예 없으면 새로 시작
           const start = await startFlight({ rocketId, symbol: rocketName });
           activeSymbol = start.session.symbol;
         }
@@ -358,82 +367,6 @@ export default function CockpitScreen() {
       }),
     [leverPosition, swipeThreshold, updateLeverPosition]
   );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const bootstrap = async () => {
-      setIsLoading(true);
-      setError("");
-
-      const token = await getAuthToken();
-      if (!token) {
-        if (isMounted) {
-          setError("Login required to start a flight.");
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      try {
-        // Get rocket info to determine the symbol (rocket name = symbol)
-        const { rockets } = await getRockets();
-        const currentRocket = rockets.find((r) => r.id === rocketId);
-        const rocketSymbol = currentRocket?.name || "AAPL";
-
-        const status = await getFlightStatus();
-        let activeSymbol = rocketSymbol;
-
-        if (status.activeSession) {
-          activeSymbol = status.activeSession.symbol || rocketSymbol;
-          if (isMounted) {
-            setSymbol(activeSymbol);
-            setTelemetry({
-              fuel: status.activeSession.currentFuel,
-              hull: status.activeSession.currentHull,
-              progress: status.activeSession.progress,
-            });
-          }
-        } else {
-          const start = await startFlight({ rocketId, symbol: rocketSymbol });
-          activeSymbol = start.session.symbol || rocketSymbol;
-          if (isMounted) {
-            const progress = (start.session.distance / start.session.targetDistance) * 100;
-            setSymbol(activeSymbol);
-            setTelemetry({
-              fuel: start.session.currentFuel,
-              hull: start.session.currentHull,
-              progress,
-            });
-          }
-        }
-
-        const chart = await getChart(activeSymbol, round);
-        if (isMounted) {
-          setChartValues(chart.gravityData.values);
-          setStabilityValues(chart.gravityData.stability);
-          chartCursor.current = 1;
-          const latestChange = chart.gravityData.stability[chart.gravityData.stability.length - 1] ?? 0;
-          setTelemetry((prev) => ({ ...prev, isStable: latestChange >= 0 }));
-        }
-      } catch (e) {
-        if (isMounted) {
-          const message = e instanceof Error ? e.message : "Failed to load cockpit data.";
-          setError(message);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    bootstrap();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [rocketId, symbol, round]);
 
   useEffect(() => {
     if (round !== 1) {
@@ -833,7 +766,7 @@ export default function CockpitScreen() {
                       key={`star-${index}`}
                       style={[
                         s.star,
-                        { width: star.size, height: star.size, top: star.top, left: star.left, opacity },
+                        { width: star.size, height: star.size, top: star.top as any, left: star.left as any, opacity },
                       ]}
                     />
                   );

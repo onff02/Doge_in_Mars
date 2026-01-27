@@ -1,9 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
-import yahooFinance from 'yahoo-finance2';
-import YahooFinance from 'yahoo-finance2';
+import YahooStockAPI from 'yahoo-stock-api';
 
-const yahooFinance = new YahooFinance();
+const yahoo = new YahooStockAPI();
 
 // 1. 라운드별 실제 역사적 경제 사건 시기 설정
 const ROUND_PERIODS: Record<number, { start: string; end: string; trend: 'bull' | 'bear' | 'volatile' }> = {
@@ -20,7 +19,6 @@ const SYMBOL_BASE_PRICES: Record<string, number> = {
   'NVDA': 150,
   'AAPL': 180,
   'KO': 60,
-  'DOGE': 0.08,
 };
 
 interface ChartDataPoint {
@@ -40,39 +38,28 @@ function generateMockChartData(symbol: string, round: number, points: number = 1
   const period = ROUND_PERIODS[round] || ROUND_PERIODS[1];
   const basePrice = SYMBOL_BASE_PRICES[symbol] || 100;
   
+  // 1. 중복 선언 제거 및 변수명 정리 (now -> startDate)
   let currentPrice = basePrice;
-  const now = Date.now();
+  const startDate = new Date(period.start).getTime(); // 'now' 대신 'startDate'로 명명
   const interval = 24 * 60 * 60 * 1000; // 1일 간격
   
-  // 트렌드에 따른 변동성 설정
-  const trendMultiplier = period.trend === 'bull' ? 0.015 : period.trend === 'bear' ? -0.01 : 0;
-  const volatility = period.trend === 'volatile' ? 0.04 : 0.025;
-  
+  // 2. 루프 시작 (중복된 'let currentPrice = basePrice;' 줄 삭제됨)
   for (let i = 0; i < points; i++) {
-    // 트렌드 + 랜덤 노이즈
-    const trend = trendMultiplier;
-    const noise = (Math.random() - 0.5) * volatility * 2;
-    const change = 1 + trend + noise;
-    
-    currentPrice *= change;
-    currentPrice = Math.max(currentPrice, basePrice * 0.3); // 최소 30%
-    
-    // OHLC 데이터 생성
-    const volatilityFactor = currentPrice * 0.02;
-    const open = currentPrice * (1 + (Math.random() - 0.5) * 0.01);
-    const close = currentPrice;
-    const high = Math.max(open, close) + Math.random() * volatilityFactor;
-    const low = Math.min(open, close) - Math.random() * volatilityFactor;
+    const change = (Math.random() - 0.5) * (basePrice * 0.05);
+    const open = currentPrice;
+    const close = currentPrice + change;
+    const high = Math.max(open, close) + Math.random() * 2;
+    const low = Math.min(open, close) - Math.random() * 2;
     
     data.push({
-      timestamp: now - (points - i) * interval,
+      // 3. 위에서 정의한 startDate를 사용하여 타임스탬프 계산
+      timestamp: startDate + (i * interval),
       open: Number(open.toFixed(2)),
       high: Number(high.toFixed(2)),
       low: Number(low.toFixed(2)),
       close: Number(close.toFixed(2)),
       volume: Math.floor(Math.random() * 10000000) + 1000000,
     });
-    
     currentPrice = close;
   }
   
@@ -80,30 +67,91 @@ function generateMockChartData(symbol: string, round: number, points: number = 1
 }
 
 /**
- * Yahoo Finance API를 통해 실기 주가 데이터를 가져옴
+ * 2. Stooq CSV 파싱 로직 (Round 1 전용)
  */
-async function getHistoricalChartData(symbol: string, round: number): Promise<ChartDataPoint[]> {
-  const period = ROUND_PERIODS[round] || ROUND_PERIODS[6];
-  
+async function getStooqHistoricalData(symbol: string, round: number): Promise<ChartDataPoint[]> {
+  const period = ROUND_PERIODS[round];
+  // Stooq은 미국 종목 뒤에 .US를 붙여야 하며, 날짜 형식이 YYYYMMDD여야 함
+  const stooqSymbol = `${symbol}.US`;
+  const d1 = period.start.replace(/-/g, '');
+  const d2 = period.end.replace(/-/g, '');
+  const url = `https://stooq.com/q/d/l/?s=${stooqSymbol}&i=d&d1=${d1}&d2=${d2}`;
+
   try {
-    const results = await yahooFinance.chart(symbol, {
-      period1: period.start,
-      period2: period.end,
-      interval: '1d', // 일봉 데이터
-    });
+    const response = await fetch(url);
+    const csvText = await response.text();
+    const lines = csvText.trim().split('\n');
     
-    return results.map(quote => ({
-      timestamp: new Date(quote.date).getTime(),
-      open: quote.open,
-      high: quote.high,
-      low: quote.low,
-      close: quote.close,
-      volume: quote.volume,
-    }));
-  } catch (error) {
-    console.error(`Yahoo Finance fetch error for ${symbol}:`, error);
+    if (lines.length <= 1) return []; // 헤더만 있거나 비어있는 경우
+
+    const results: ChartDataPoint[] = [];
+    // Date,Open,High,Low,Close,Volume 순서 파싱
+    for (let i = 1; i < lines.length; i++) {
+      const [dateStr, open, high, low, close, volume] = lines[i].split(',');
+      const timestamp = new Date(dateStr).getTime();
+      
+      // 날짜 검증: 만약 2008년 데이터를 요청했는데 2025년 데이터가 섞여있다면 제외
+      const year = new Date(timestamp).getFullYear();
+      if (year > 2010 && round === 1) continue; 
+
+      results.push({
+        timestamp,
+        open: parseFloat(open),
+        high: parseFloat(high),
+        low: parseFloat(low),
+        close: parseFloat(close),
+        volume: parseInt(volume) || 0
+      });
+    }
+    return results.sort((a, b) => a.timestamp - b.timestamp);
+  } catch (e) {
+    console.error("Stooq fetch error:", e);
     return [];
   }
+}
+
+/**
+ * 3. 통합 데이터 로더
+ */
+async function getHistoricalChartData(symbol: string, round: number): Promise<ChartDataPoint[]> {
+  // Round 1은 무조건 Stooq 시도
+  if (round === 1) {
+    const stooqData = await getStooqHistoricalData(symbol, round);
+    if (stooqData.length > 0) return stooqData;
+  }
+
+  // 나머지 라운드 또는 Stooq 실패 시 yahoo-stock-api 시도
+  const period = ROUND_PERIODS[round] || ROUND_PERIODS[1];
+  try {
+    const result = await yahoo.getHistoricalPrices({
+      symbol,
+      startDate: new Date(period.start),
+      endDate: new Date(period.end),
+      interval: '1d'
+    });
+
+    if (result && Array.isArray(result) && result.length > 0) {
+      // 날짜 검증: API가 성공이라고 속이고 미래 날짜를 주는지 확인
+      const firstYear = new Date(result[0].date * 1000).getFullYear();
+      const expectedYear = new Date(period.start).getFullYear();
+      
+      if (Math.abs(firstYear - expectedYear) <= 1) {
+        return result.map(item => ({
+          timestamp: item.date * 1000,
+          open: item.open,
+          high: item.high,
+          low: item.low,
+          close: item.close,
+          volume: item.volume
+        })).sort((a, b) => a.timestamp - b.timestamp);
+      }
+    }
+  } catch (error) {
+    console.error(`Yahoo fetch error for ${symbol}:`, error);
+  }
+
+  // 모든 API 실패 시 기간에 맞는 Mock 데이터 반환
+  return generateMockChartData(symbol, round);
 }
 
 /**
@@ -121,6 +169,10 @@ function transformToGravityData(chartData: ChartDataPoint[]) {
   });
   
   return { timestamps, values, stability };
+}
+
+function formatDate(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
 
 export async function chartRoutes(fastify: FastifyInstance) {
@@ -210,17 +262,30 @@ export async function chartRoutes(fastify: FastifyInstance) {
   }>, reply: FastifyReply) => {
     try {
       const symbol = request.query.symbol || 'NVDA';
-      const quote = await yahooFinance.quote(symbol);
-      
+      const end = new Date();
+      const start = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+      const hist = await (yahoo as any).getHistoricalPrices(symbol, formatDate(start), formatDate(end), '1d');
+
+      if (!hist || !Array.isArray(hist) || hist.length === 0) {
+        throw new Error('No live data');
+      }
+
+      const latest = hist[hist.length - 1];
+      const prev = hist[hist.length - 2] || latest;
+      const price = Number(latest.close ?? latest.Close ?? latest.adjClose ?? latest.AdjClose ?? 0);
+      const prevPrice = Number(prev.close ?? prev.Close ?? prev.adjClose ?? prev.AdjClose ?? price);
+      const change = price - prevPrice;
+      const changePercent = prevPrice !== 0 ? (change / prevPrice) * 100 : 0;
+
       return reply.send({
         success: true,
         data: {
-          symbol: symbol,
+          symbol,
           timestamp: Date.now(),
-          price: quote.regularMarketPrice,
-          change: quote.regularMarketChange,
-          changePercent: quote.regularMarketChangePercent,
-          isStable: (quote.regularMarketChangePercent || 0) >= -2, // 임의의 안정도 기준
+          price,
+          change,
+          changePercent,
+          isStable: changePercent >= -2, // 임의의 안정도 기준
         },
       });
     } catch (error) {
