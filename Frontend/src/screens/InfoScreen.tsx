@@ -28,17 +28,6 @@ export default function InfoScreen({ rocketId, onBack, updates }: InfoScreenProp
 
   const lastSync = logItems[0]?.time ?? "00:00";
 
-  const toneColor = (tone: UpdateItem["tone"]) => {
-    switch (tone) {
-      case "warning":
-        return theme.colors.warning;
-      case "success":
-        return theme.colors.success;
-      default:
-        return theme.colors.info;
-    }
-  };
-
   return (
     <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
@@ -74,16 +63,16 @@ export default function InfoScreen({ rocketId, onBack, updates }: InfoScreenProp
 
           <ScrollView style={s.logList} contentContainerStyle={s.logContent}>
             {logItems.map((item, index) => {
-              const color = toneColor(item.tone);
               return (
                 <View key={`${item.time}-${index}`} style={s.logRow}>
-                  <View style={[s.logDot, { backgroundColor: color }]} />
+                  <View style={s.logDot} />
                   <View style={s.logCard}>
                     <View style={s.logHeader}>
                       <Text style={s.logTime}>{item.time}</Text>
-                      <Text style={[s.logTone, { color }]}>{item.tone.toUpperCase()}</Text>
                     </View>
-                    <Text style={s.logText}>{item.message}</Text>
+                    <Text style={s.logText} numberOfLines={1} ellipsizeMode="tail">
+                      {item.message}
+                    </Text>
                   </View>
                 </View>
               );
@@ -128,8 +117,8 @@ const s = StyleSheet.create({
   metaTime: { color: theme.colors.textMuted, fontSize: 10 },
   logList: { flex: 1 },
   logContent: { gap: 10, paddingBottom: 12 },
-  logRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  logDot: { width: 8, height: 8, borderRadius: 99, marginTop: 10 },
+  logRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  logDot: { width: 8, height: 8, borderRadius: 99, backgroundColor: theme.colors.accentBorderSoft },
   logCard: {
     flex: 1,
     backgroundColor: theme.colors.panel,
@@ -139,7 +128,7 @@ const s = StyleSheet.create({
     borderColor: theme.colors.panelBorder,
   },
   logHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  logTime: { color: theme.colors.textAccent, fontSize: 10, letterSpacing: 0.6 },
+  logTime: { color: theme.colors.textAccent, fontSize: 12, letterSpacing: 0.6 },
   logTone: { fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
-  logText: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16 },
+  logText: { color: theme.colors.textMuted, fontSize: 13, lineHeight: 18 },
 });
