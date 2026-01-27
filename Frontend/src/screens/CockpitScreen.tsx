@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ImageBackground, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Animated, Easing, ImageBackground, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -39,9 +39,9 @@ const FINAL_OUTCOME_VIDEOS = {
 } as const;
 
 const FINAL_MESSAGES: Record<FinalOutcomeKey, string> = {
-  fail: "효율적인 연료 소모에 실패한 도지는 화성 도달에 실패했다.",
-  success1: "효율적인 연료 사용에 성공한 도지는 안전하게 화성에 착륙했다.",
-  success2: "완벽한 연료 사용에 성공한 도지는 화성에서 도지시티 건설에 성공하여 세를 키웠고 지구를 침공했다.",
+  fail: "효율적인 연료 소모에 실패한 도지는 화성 도달에 실패했습니다.",
+  success1: "효율적인 연료 사용에 성공한 도지는 안전하게 화성에 착륙했습니다.",
+  success2: "완벽한 연료 사용에 성공한 도지는 화성에서 도지시티 건설에 성공하여 세를 키웠고 지구를 침공했습니다.",
 };
 
 const ROUND_ANSWERS: Record<number, LeverChoice> = {
@@ -79,6 +79,17 @@ const PHASE_INTROS: Record<number, { title: string; lines: string[] }> = {
     lines: ["우주는 이상하리만큼 평화롭습니다.", "과연 당신의 선택도 쉬울까요?"],
   },
 };
+
+const STAR_POSITIONS = [
+  { top: "12%", left: "18%", size: 3 },
+  { top: "18%", left: "48%", size: 2 },
+  { top: "10%", left: "72%", size: 3 },
+  { top: "26%", left: "30%", size: 2 },
+  { top: "32%", left: "60%", size: 2 },
+  { top: "20%", left: "82%", size: 3 },
+  { top: "38%", left: "22%", size: 2 },
+  { top: "42%", left: "70%", size: 3 },
+];
 
 const BG_IMAGE =
   "https://images.unsplash.com/photo-1709409903008-fbc1ce9b7dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxzcGFjZSUyMHN0YXJzJTIwbmVidWxhfGVufDF8fHx8MTc2OTIzMjkzNXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral";
@@ -183,6 +194,15 @@ export default function CockpitScreen() {
   const [pendingRound, setPendingRound] = useState<number | null>(null);
   const [pendingFinalKey, setPendingFinalKey] = useState<FinalOutcomeKey | null>(null);
   const chartCursor = useRef(1);
+  const blackHolePulse = useRef(new Animated.Value(0)).current;
+  const shakePulse = useRef(new Animated.Value(0)).current;
+  const twinkleA = useRef(new Animated.Value(0)).current;
+  const twinkleB = useRef(new Animated.Value(0)).current;
+  const radioPulse = useRef(new Animated.Value(0)).current;
+  const explosionA = useRef(new Animated.Value(0)).current;
+  const explosionB = useRef(new Animated.Value(0)).current;
+  const explosionC = useRef(new Animated.Value(0)).current;
+  const explosionD = useRef(new Animated.Value(0)).current;
 
   const fallbackData = useMemo(() => generateGsiData(40), []);
   const gsiData = chartValues.length ? chartValues : fallbackData;
@@ -224,6 +244,30 @@ export default function CockpitScreen() {
   const phaseIntro = PHASE_INTROS[round] ?? { title: `Phase ${round}`, lines: [] };
   const phaseLabel = `Phase ${round}: ${phaseIntro.title}`;
   const phaseCopy = phaseIntro.lines.join("\n");
+  const blackHoleScale = blackHolePulse.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1.05] });
+  const blackHoleOpacity = blackHolePulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.8] });
+  const blackHoleHaloScale = blackHolePulse.interpolate({ inputRange: [0, 1], outputRange: [1.05, 1.3] });
+  const blackHoleHaloOpacity = blackHolePulse.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.35] });
+  const blackHoleRotate = blackHolePulse.interpolate({ inputRange: [0, 1], outputRange: ["-10deg", "8deg"] });
+  const shakeX = shakePulse.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, -6, 6, -4, 0] });
+  const shakeY = shakePulse.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, 5, -5, 4, 0] });
+  const shakeRotate = shakePulse.interpolate({ inputRange: [0, 0.5, 1], outputRange: ["0deg", "0.6deg", "0deg"] });
+  const twinkleOpacityA = twinkleA.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.2, 0.95, 0.2] });
+  const twinkleOpacityB = twinkleB.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.9, 0.25, 0.9] });
+  const radioScaleA = radioPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.2] });
+  const radioScaleB = radioPulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1.5] });
+  const radioScaleC = radioPulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1.85] });
+  const radioOpacityA = radioPulse.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.4, 0.2, 0] });
+  const radioOpacityB = radioPulse.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.35, 0.15, 0] });
+  const radioOpacityC = radioPulse.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 0.1, 0] });
+  const explosionScaleA = explosionA.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.7] });
+  const explosionOpacityA = explosionA.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0.9, 0] });
+  const explosionScaleB = explosionB.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.6] });
+  const explosionOpacityB = explosionB.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0.85, 0] });
+  const explosionScaleC = explosionC.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.5] });
+  const explosionOpacityC = explosionC.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0.8, 0] });
+  const explosionScaleD = explosionD.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.8] });
+  const explosionOpacityD = explosionD.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0.9, 0] });
   const finalScoreLabel = `${correctCount} / ${MAX_ROUNDS}`;
   const finalMessage = finalOutcomeKey ? FINAL_MESSAGES[finalOutcomeKey] : "";
   const confirmDisabled = isConfirming || leverPosition === "middle";
@@ -336,6 +380,140 @@ export default function CockpitScreen() {
       isMounted = false;
     };
   }, [rocketId, symbol, round]);
+
+  useEffect(() => {
+    if (view === "round" && round === 1) {
+      blackHolePulse.setValue(0);
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(blackHolePulse, {
+            toValue: 1,
+            duration: 1800,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(blackHolePulse, {
+            toValue: 0,
+            duration: 1800,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    blackHolePulse.stopAnimation();
+    blackHolePulse.setValue(0);
+    return undefined;
+  }, [blackHolePulse, round, view]);
+
+  useEffect(() => {
+    if (view === "round" && round === 2) {
+      shakePulse.setValue(0);
+      const loop = Animated.loop(
+        Animated.timing(shakePulse, {
+          toValue: 1,
+          duration: 520,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    shakePulse.stopAnimation();
+    shakePulse.setValue(0);
+    return undefined;
+  }, [round, shakePulse, view]);
+
+  useEffect(() => {
+    if (view === "round" && round === 3) {
+      twinkleA.setValue(0);
+      twinkleB.setValue(0);
+      const loopA = Animated.loop(
+        Animated.sequence([
+          Animated.timing(twinkleA, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(twinkleA, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        ])
+      );
+      const loopB = Animated.loop(
+        Animated.sequence([
+          Animated.delay(400),
+          Animated.timing(twinkleB, { toValue: 1, duration: 2000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(twinkleB, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        ])
+      );
+      loopA.start();
+      loopB.start();
+      return () => {
+        loopA.stop();
+        loopB.stop();
+      };
+    }
+    twinkleA.stopAnimation();
+    twinkleB.stopAnimation();
+    twinkleA.setValue(0);
+    twinkleB.setValue(0);
+    return undefined;
+  }, [round, twinkleA, twinkleB, view]);
+
+  useEffect(() => {
+    if (view === "round" && round === 4) {
+      radioPulse.setValue(0);
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(radioPulse, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(radioPulse, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    radioPulse.stopAnimation();
+    radioPulse.setValue(0);
+    return undefined;
+  }, [radioPulse, round, view]);
+
+  useEffect(() => {
+    if (view === "round" && round === 5) {
+      explosionA.setValue(0);
+      explosionB.setValue(0);
+      explosionC.setValue(0);
+      explosionD.setValue(0);
+      const makeLoop = (value: Animated.Value, delay: number, duration: number) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(value, { toValue: 1, duration, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+            Animated.timing(value, { toValue: 0, duration: 0, useNativeDriver: true }),
+          ])
+        );
+      const loopA = makeLoop(explosionA, 100, 720);
+      const loopB = makeLoop(explosionB, 360, 760);
+      const loopC = makeLoop(explosionC, 620, 680);
+      const loopD = makeLoop(explosionD, 880, 740);
+      loopA.start();
+      loopB.start();
+      loopC.start();
+      loopD.start();
+      return () => {
+        loopA.stop();
+        loopB.stop();
+        loopC.stop();
+        loopD.stop();
+      };
+    }
+    explosionA.stopAnimation();
+    explosionB.stopAnimation();
+    explosionC.stopAnimation();
+    explosionD.stopAnimation();
+    explosionA.setValue(0);
+    explosionB.setValue(0);
+    explosionC.setValue(0);
+    explosionD.setValue(0);
+    return undefined;
+  }, [explosionA, explosionB, explosionC, explosionD, round, view]);
 
   const handleOutcomeEnd = useCallback(() => {
     if (pendingFinalKey) {
@@ -543,10 +721,103 @@ export default function CockpitScreen() {
   }
 
   if (view === "round") {
+    const shakeStyle =
+      round === 2
+        ? {
+            transform: [{ translateX: shakeX }, { translateY: shakeY }, { rotate: shakeRotate }],
+          }
+        : null;
     return (
       <View style={s.root}>
         <View style={[s.frame, { width: frame.width, height: frame.height }]}>
-          {windowLayer}
+          <Animated.View style={[s.roundBackground, shakeStyle]} pointerEvents="none">
+            {windowLayer}
+            {round === 1 ? (
+              <View style={s.blackHoleLayer}>
+                <Animated.View
+                  style={[
+                    s.blackHoleHalo,
+                    { opacity: blackHoleHaloOpacity, transform: [{ scale: blackHoleHaloScale }] },
+                  ]}
+                />
+                <Animated.View
+                  style={[
+                    s.blackHoleRing,
+                    { opacity: blackHoleOpacity, transform: [{ scale: blackHoleScale }, { rotate: blackHoleRotate }] },
+                  ]}
+                />
+                <View style={s.blackHoleCore} />
+              </View>
+            ) : null}
+            {round === 3 ? (
+              <View style={s.starLayer}>
+                {STAR_POSITIONS.map((star, index) => {
+                  const opacity = index % 2 === 0 ? twinkleOpacityA : twinkleOpacityB;
+                  return (
+                    <Animated.View
+                      key={`star-${index}`}
+                      style={[
+                        s.star,
+                        { width: star.size, height: star.size, top: star.top, left: star.left, opacity },
+                      ]}
+                    />
+                  );
+                })}
+              </View>
+            ) : null}
+            {round === 4 ? (
+              <View style={s.radioLayer}>
+                <View style={s.radioSource} />
+                <Animated.View style={[s.radioRing, { opacity: radioOpacityA, transform: [{ scale: radioScaleA }] }]} />
+                <Animated.View style={[s.radioRing, { opacity: radioOpacityB, transform: [{ scale: radioScaleB }] }]} />
+                <Animated.View style={[s.radioRing, { opacity: radioOpacityC, transform: [{ scale: radioScaleC }] }]} />
+              </View>
+            ) : null}
+            {round === 5 ? (
+              <View style={s.explosionLayer}>
+                <Animated.View
+                  style={[
+                    s.explosionBurst,
+                    { top: "18%", left: "16%", opacity: explosionOpacityA, transform: [{ scale: explosionScaleA }] },
+                  ]}
+                >
+                  <View style={s.explosionCore} />
+                  <View style={s.explosionSpark} />
+                  <View style={s.explosionSparkAlt} />
+                </Animated.View>
+                <Animated.View
+                  style={[
+                    s.explosionBurst,
+                    { top: "12%", right: "18%", opacity: explosionOpacityB, transform: [{ scale: explosionScaleB }] },
+                  ]}
+                >
+                  <View style={s.explosionCore} />
+                  <View style={s.explosionSpark} />
+                  <View style={s.explosionSparkAlt} />
+                </Animated.View>
+                <Animated.View
+                  style={[
+                    s.explosionBurst,
+                    { bottom: "22%", left: "24%", opacity: explosionOpacityC, transform: [{ scale: explosionScaleC }] },
+                  ]}
+                >
+                  <View style={s.explosionCore} />
+                  <View style={s.explosionSpark} />
+                  <View style={s.explosionSparkAlt} />
+                </Animated.View>
+                <Animated.View
+                  style={[
+                    s.explosionBurst,
+                    { bottom: "18%", right: "20%", opacity: explosionOpacityD, transform: [{ scale: explosionScaleD }] },
+                  ]}
+                >
+                  <View style={s.explosionCore} />
+                  <View style={s.explosionSpark} />
+                  <View style={s.explosionSparkAlt} />
+                </Animated.View>
+              </View>
+            ) : null}
+          </Animated.View>
           <View style={s.roundContent}>
             <View style={s.roundCard}>
               <Text style={s.roundEyebrow}>{phaseLabel}</Text>
@@ -562,9 +833,16 @@ export default function CockpitScreen() {
   }
 
   return (
-    <View style={s.root}>
+      <View style={s.root}>
       <View style={[s.frame, { width: frame.width, height: frame.height }]}>
         {windowLayer}
+        {round === 1 ? (
+          <View style={s.phaseOneHint} pointerEvents="none">
+            <Text style={s.phaseOneHintText}>
+              좌측의 차트와 우측의 정보를 바탕으로 도지가 안전하게 화성에 도착하게 해주세요.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={s.console} pointerEvents="none">
           <View style={s.consoleEdge} />
@@ -696,6 +974,146 @@ const s = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
     borderColor: "rgba(251,191,36,0.25)",
+  },
+  phaseOneHint: {
+    position: "absolute",
+    top: 12,
+    left: 24,
+    right: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: theme.radius.md,
+    backgroundColor: "rgba(4,7,14,0.6)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.25)",
+  },
+  phaseOneHintText: {
+    color: theme.colors.textPrimary,
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: "center",
+  },
+  roundBackground: { ...StyleSheet.absoluteFillObject },
+  blackHoleLayer: {
+    position: "absolute",
+    top: "6%",
+    left: "4%",
+    width: 220,
+    height: 220,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  blackHoleHalo: {
+    position: "absolute",
+    width: 240,
+    height: 240,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "rgba(251,191,36,0.35)",
+    backgroundColor: "rgba(0,0,0,0.05)",
+  },
+  blackHoleRing: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    borderWidth: 3,
+    borderColor: "rgba(234,88,12,0.55)",
+    backgroundColor: "rgba(0,0,0,0.12)",
+  },
+  blackHoleCore: {
+    width: 120,
+    height: 120,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.9)",
+    shadowColor: "rgba(0,0,0,0.9)",
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  starLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  star: {
+    position: "absolute",
+    borderRadius: 999,
+    backgroundColor: "rgba(251,191,36,0.9)",
+  },
+  radioLayer: {
+    position: "absolute",
+    top: "8%",
+    right: "6%",
+    width: 200,
+    height: 200,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioSource: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(56,189,248,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(191,219,254,0.8)",
+  },
+  radioRing: {
+    position: "absolute",
+    width: 140,
+    height: 140,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "rgba(125,211,252,0.7)",
+    backgroundColor: "rgba(14,116,144,0.05)",
+  },
+  explosionLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  explosionBurst: {
+    position: "absolute",
+    width: 90,
+    height: 90,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "rgba(251,191,36,0.9)",
+    backgroundColor: "rgba(249,115,22,0.35)",
+    shadowColor: "rgba(234,88,12,0.9)",
+    shadowOpacity: 0.8,
+    shadowRadius: 16,
+    elevation: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  explosionCore: {
+    width: "42%",
+    height: "42%",
+    borderRadius: 999,
+    backgroundColor: "rgba(254,215,170,0.9)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
+    shadowColor: "rgba(255,237,213,0.9)",
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  explosionSpark: {
+    position: "absolute",
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    top: "12%",
+    right: "16%",
+    backgroundColor: "rgba(254,215,170,0.85)",
+  },
+  explosionSparkAlt: {
+    position: "absolute",
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    bottom: "18%",
+    left: "14%",
+    backgroundColor: "rgba(255,255,255,0.7)",
   },
   console: {
     position: "absolute",
