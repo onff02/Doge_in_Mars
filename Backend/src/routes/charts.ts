@@ -1,6 +1,9 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../lib/prisma.js';
 import yahooFinance from 'yahoo-finance2';
+import YahooFinance from 'yahoo-finance2';
+
+const yahooFinance = new YahooFinance();
 
 // 1. 라운드별 실제 역사적 경제 사건 시기 설정
 const ROUND_PERIODS: Record<number, { start: string; end: string; trend: 'bull' | 'bear' | 'volatile' }> = {

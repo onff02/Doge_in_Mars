@@ -11,7 +11,7 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
-import { clearAuthSession, getAuthToken, getChart, getFlightStatus, startFlight, syncFlight } from "../api/client";
+import { getAuthToken, getChart, getFlightStatus, getRockets, startFlight, syncFlight } from "../api/client";
 
 type Telemetry = {
   fuel?: number;
@@ -131,7 +131,7 @@ function OutcomeVideo({ source, onEnd }: { source: number; onEnd: () => void }) 
 }
 
 export default function CockpitScreen() {
-  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const nav = useNavigation<NativeStackNavigationProp<RootStackParamList, "Cockpit">>();
   const route = useRoute<RouteProp<RootStackParamList, "Cockpit">>();
   const rocketId = route.params?.rocketId ?? 1;
   const startInRound = route.params?.startInRound ?? false;
@@ -145,7 +145,7 @@ export default function CockpitScreen() {
   const [telemetry, setTelemetry] = useState<Telemetry>({});
   const [chartValues, setChartValues] = useState<number[]>([]);
   const [stabilityValues, setStabilityValues] = useState<number[]>([]);
-  const [symbol, setSymbol] = useState("AAPL");
+  const [symbol, setSymbol] = useState("");
   const [error, setError] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -251,11 +251,16 @@ export default function CockpitScreen() {
       }
 
       try {
+        // Get rocket info to determine the symbol (rocket name = symbol)
+        const { rockets } = await getRockets();
+        const currentRocket = rockets.find((r) => r.id === rocketId);
+        const rocketSymbol = currentRocket?.name || "AAPL";
+
         const status = await getFlightStatus();
-        let activeSymbol = symbol;
+        let activeSymbol = rocketSymbol;
 
         if (status.activeSession) {
-          activeSymbol = status.activeSession.symbol || symbol;
+          activeSymbol = status.activeSession.symbol || rocketSymbol;
           if (isMounted) {
             setSymbol(activeSymbol);
             setTelemetry({
@@ -265,8 +270,8 @@ export default function CockpitScreen() {
             });
           }
         } else {
-          const start = await startFlight({ rocketId, symbol });
-          activeSymbol = start.session.symbol || symbol;
+          const start = await startFlight({ rocketId, symbol: rocketSymbol });
+          activeSymbol = start.session.symbol || rocketSymbol;
           if (isMounted) {
             const progress = (start.session.distance / start.session.targetDistance) * 100;
             setSymbol(activeSymbol);
@@ -328,7 +333,7 @@ export default function CockpitScreen() {
     await clearAuthSession();
     nav.reset({ index: 0, routes: [{ name: "Start" }] });
   }, [nav]);
-
+  
   const handleConfirm = useCallback(async () => {
     setDecisionError("");
     if (chartValues.length < 2) {
@@ -482,9 +487,6 @@ export default function CockpitScreen() {
               <Text style={s.finalTitle}>RESULT</Text>
               <Text style={s.finalScore}>{finalScoreLabel}</Text>
               <Text style={s.finalMessage}>{finalMessage}</Text>
-              <Pressable style={({ pressed }) => [s.finalLogout, pressed && s.finalLogoutPressed]} onPress={handleLogout}>
-                <Text style={s.finalLogoutText}>LOG OUT</Text>
-              </Pressable>
             </View>
           </View>
         </View>
@@ -621,7 +623,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.2)",
   },
   outcomeVideo: { ...StyleSheet.absoluteFillObject },
-  outcomeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(255,255,255,0.08)" },
+  outcomeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.25)" },
   window: { ...StyleSheet.absoluteFillObject },
   windowOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: theme.colors.overlay },
   glassSheen: {
@@ -696,17 +698,6 @@ const s = StyleSheet.create({
   finalTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 16, letterSpacing: 1, marginBottom: 8 },
   finalScore: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 26, letterSpacing: 1, marginBottom: 10 },
   finalMessage: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center" },
-  finalLogout: {
-    marginTop: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    borderColor: theme.colors.accentBorderStrong,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  finalLogoutPressed: { transform: [{ scale: 0.98 }] },
-  finalLogoutText: { color: theme.colors.textAccentStrong, fontWeight: "800", fontSize: 11, letterSpacing: 0.8 },
   roundButton: {
     paddingVertical: 10,
     paddingHorizontal: 26,
