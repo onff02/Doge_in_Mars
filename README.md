@@ -45,6 +45,8 @@
 ![System Architecture](Frontend/assets/week3.png)
 ### Database Schema
 ![Database Schema](Frontend/assets/DB_schema.jpg)
+
+```dbml
 // Doge City in Mars DB Schema (DBML)
 // Generated from Prisma Schema
 
@@ -203,7 +205,7 @@ Ref: flight_sessions.userId > users.id [delete: cascade] // 유저별 항해 세
 Ref: flight_sessions.rocketId > rockets.id // 세션에서 사용된 로켓
 Ref: game_events.targetRocketId > rockets.id // 특정 로켓 대상 이벤트
 Ref: flight_logs.sessionId > flight_sessions.id [delete: cascade] // 세션별 행동 로그
-
+```
 ---
 
 ## 🛸 4. 주요 기능 소개
