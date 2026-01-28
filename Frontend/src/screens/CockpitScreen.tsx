@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, ImageBackground, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Animated, Easing, ImageBackground, PanResponder, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -436,6 +436,20 @@ export default function CockpitScreen() {
   const finalScoreLabel = `${correctCount} / ${MAX_ROUNDS}`;
   const finalMessage = finalOutcomeKey ? FINAL_MESSAGES[finalOutcomeKey] : "";
   const confirmDisabled = isConfirming || leverPosition === "middle";
+  const analysisDisplay = useMemo(() => {
+    if (!analysisResult) return "";
+    const joinLines = (label: string, items: string[]) =>
+      items && items.length ? `${label}:\n- ${items.join("\n- ")}` : `${label}: 없음`;
+    return [
+      `성향: ${analysisResult.archetype}`,
+      `요약: ${analysisResult.oneLineSummary}`,
+      joinLines("특성", analysisResult.behaviorTraits),
+      joinLines("강점", analysisResult.strengths),
+      joinLines("약점", analysisResult.weaknesses),
+      `학습 인사이트: ${analysisResult.learningInsight}`,
+      `등급: ${analysisResult.grade}`,
+    ].join("\n");
+  }, [analysisResult]);
 
   const currentBg = useMemo(() => {
     const index = Math.min(Math.max(correctCount, 0), 6);
@@ -716,6 +730,7 @@ export default function CockpitScreen() {
     try {
       setAnalysisStatus("loading");
       setAnalysisError("");
+      setAnalysisResult(null);
       const rocketSymbol = (symbol || "NVDA").toUpperCase();
       const session: GameSession = {
         rocket: rocketSymbol,
@@ -930,14 +945,16 @@ export default function CockpitScreen() {
                 </Pressable>
                 {analysisStatus === "idle" ? (
                   <Text style={s.analysisHint}>AI 분석 버튼을 눌러 성향을 확인하세요.</Text>
+                ) : analysisStatus === "loading" ? (
+                  <Text style={s.analysisResult}>분석 중입니다...</Text>
+                ) : analysisStatus === "error" ? (
+                  <Text style={s.analysisResult}>{analysisError || "분석 요청에 실패했습니다."}</Text>
+                ) : analysisResult ? (
+                  <ScrollView style={s.analysisScroll} contentContainerStyle={s.analysisScrollContent} showsVerticalScrollIndicator>
+                    <Text style={s.analysisResult}>{analysisDisplay}</Text>
+                  </ScrollView>
                 ) : (
-                  <Text style={s.analysisResult}>
-                    {analysisStatus === "error"
-                      ? analysisError || "분석 요청에 실패했습니다."
-                      : analysisResult
-                        ? JSON.stringify(analysisResult, null, 2)
-                        : "분석 결과가 없습니다."}
-                  </Text>
+                  <Text style={s.analysisResult}>분석 결과가 없습니다.</Text>
                 )}
               </View>
               <View style={s.finalActions}>
@@ -1529,7 +1546,10 @@ const s = StyleSheet.create({
     borderColor: theme.colors.accentBorderSoft,
     backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center",
+    maxHeight: 220,
   },
+  analysisScroll: { width: "100%", maxHeight: 160 },
+  analysisScrollContent: { paddingBottom: 4 },
   analysisButton: {
     paddingVertical: 6,
     paddingHorizontal: 16,
@@ -1542,7 +1562,7 @@ const s = StyleSheet.create({
   analysisButtonDisabled: { opacity: 0.7 },
   analysisButtonText: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 12, letterSpacing: 0.8 },
   analysisHint: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 8 },
-  analysisResult: { color: theme.colors.textPrimary, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 8 },
+  analysisResult: { color: theme.colors.textPrimary, fontSize: 12, lineHeight: 18, textAlign: "left", marginTop: 8, width: "100%" },
   finalActions: { flexDirection: "row", gap: 12, marginTop: 16 },
   finalActionButton: {
     paddingVertical: 10,

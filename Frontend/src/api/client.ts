@@ -178,17 +178,6 @@ export type DecisionAnalysisResponse = {
   analysis: AnalysisResult;
 };
 
-export type DecisionRecord = {
-  round: number;
-  symbol: string;
-  choice: "up" | "down";
-  correct: boolean;
-  correctDirection?: "up" | "down";
-};
-
-export type DecisionAnalysisResponse = {
-  analysis: string;
-};
 
 export async function getAuthToken(): Promise<string | null> {
   return AsyncStorage.getItem(AUTH_TOKEN_KEY);
