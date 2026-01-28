@@ -7,45 +7,56 @@ async function main() {
   const nvda = await prisma.rocket.upsert({
     where: { name: 'NVDA' },
     update: {
-      description: 'NVIDIA - AI/GPU 선두주자. 높은 성장성, 높은 변동성.',
+      description: 'NVIDIA - 초고속 AI 엔진. 압도적 가속력을 자랑하지만 기체가 다소 취약합니다.',
+      boost: 7.5,    // PER 10 이하: 별 5개
+      fuelEco: 10.0, // ROE 8~12: 별 2개
+      armor: 3.5,    // PBR 2.0 이상: 별 1개
     },
     create: {
       name: 'NVDA',
-      description: 'NVIDIA - AI/GPU 선두주자. 높은 성장성, 높은 변동성.',
+      description: 'NVIDIA - 초고속 AI 엔진. 압도적 가속력을 자랑하지만 기체가 다소 취약합니다.',
       category: 'Growth',
-      boost: 1.8,    // PER 기반: 호재 시 폭발력 상
-      fuelEco: 1.2,  // ROE 기반
-      armor: 1.5,    // PBR 기반
+      boost: 7.5,
+      fuelEco: 10.0,
+      armor: 3.5,
     },
   });
 
+  // 2. AAPL: 밸런스형 (High Fuel Eco)
   const aapl = await prisma.rocket.upsert({
     where: { name: 'AAPL' },
     update: {
-      description: 'Apple - 안정적인 블루칩. 균형 잡힌 성능.',
+      description: 'Apple - 우주 표준 엔진. 극강의 연료 효율로 장거리 항해에 최적화되어 있습니다.',
+      boost: 18.0,   // PER 15~20: 별 3개
+      fuelEco: 25.0, // ROE 20 이상: 별 5개
+      armor: 1.2,    // PBR 1.0~1.5: 별 3개
     },
     create: {
       name: 'AAPL',
-      description: 'Apple - 안정적인 블루칩. 균형 잡힌 성능.',
+      description: 'Apple - 우주 표준 엔진. 극강의 연료 효율로 장거리 항해에 최적화되어 있습니다.',
       category: 'Blue-Chip',
-      boost: 1.3,
-      fuelEco: 1.8,  // ROE 기반: 에너지 효율 최상
-      armor: 1.3,
+      boost: 18.0,
+      fuelEco: 25.0,
+      armor: 1.2,
     },
   });
 
+  // 3. KO: 방어형 (High Armor)
   const ko = await prisma.rocket.upsert({
     where: { name: 'KO' },
     update: {
-      description: 'Coca-Cola - 배당주의 왕. 안정성 최고.',
+      description: 'Coca-Cola - 합금 선체. 어떤 블랙홀 함정에서도 견뎌내는 강철 같은 내구도를 가졌습니다.',
+      boost: 30.0,   // PER 25 이상: 별 1개
+      fuelEco: 14.0, // ROE 12~15: 별 3개
+      armor: 0.5,    // PBR 0.7 이하: 별 5개
     },
     create: {
       name: 'KO',
-      description: 'Coca-Cola - 배당주의 왕. 안정성 최고.',
+      description: 'Coca-Cola - 합금 선체. 어떤 블랙홀 함정에서도 견뎌내는 강철 같은 내구도를 가졌습니다.',
       category: 'Dividend',
-      boost: 1.1,
-      fuelEco: 1.1,
-      armor: 1.8,    // PBR 기반: 선체 내구도 최고
+      boost: 30.0,
+      fuelEco: 14.0,
+      armor: 0.5,
     },
   });
 

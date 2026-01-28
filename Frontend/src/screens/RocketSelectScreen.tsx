@@ -108,40 +108,29 @@ export default function RocketSelectScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    const toBoostScore = (per?: number) => {
-      if (!per || per <= 0) return 1;
-      return Math.min(10, Math.max(1, Math.round(30 / per)));
-    };
-
-    const toArmorScore = (pbr?: number) => {
-      if (!pbr || pbr <= 0) return 1;
-      return Math.min(10, Math.max(1, Math.round(10 / pbr)));
-    };
-
-    const toFuelScore = (roe?: number) => {
-      if (!roe || roe <= 0) return 1;
-      return Math.min(10, Math.max(1, Math.round(roe / 2)));
+    const ratingToScore = (rating?: string) => {
+      if (!rating) return 6; // 기본값
+      const stars = (rating.match(/★/g) || []).length;
+      return stars > 0 ? stars * 2 : 2; // 별이 하나도 없으면 최소 2점
     };
 
     const loadRockets = async () => {
       try {
         const response = await getRockets();
-        const cards = response.rockets.map((rocket) => {
-          const boostValue = rocket.gameStats?.boost?.value ?? rocket.rawStats?.PER ?? 0;
-          const armorValue = rocket.gameStats?.armor?.value ?? rocket.rawStats?.PBR ?? 0;
-          const fuelValue = rocket.gameStats?.fuelEco?.value ?? rocket.rawStats?.ROE ?? 0;
-          return {
-            id: rocket.id,
-            name: rocket.name,
-            description: rocket.description || "Unknown specs",
-            stats: {
-              speed: toBoostScore(boostValue),
-              armor: toArmorScore(armorValue),
-              power: toFuelScore(fuelValue),
-            },
-            raw: rocket,
-          };
-        });
+        console.log("[RocketSelect] Loaded:", response.rockets.length);
+
+        const cards = response.rockets.map((rocket) => ({
+          id: rocket.id,
+          name: rocket.name,
+          description: rocket.description || "No description available",
+          stats: {
+            // 백엔드 gameStats가 없을 경우 fallbackRockets의 느낌을 살리기 위해 기본값 부여
+            speed: rocket.gameStats ? ratingToScore(rocket.gameStats.boost.rating) : 6,
+            armor: rocket.gameStats ? ratingToScore(rocket.gameStats.armor.rating) : 6,
+            power: rocket.gameStats ? ratingToScore(rocket.gameStats.fuelEco.rating) : 6,
+          },
+          raw: rocket,
+        }));
 
         if (isMounted) {
           setRocketCards(cards.length ? cards : fallbackRockets);
@@ -149,8 +138,7 @@ export default function RocketSelectScreen() {
         }
       } catch (e) {
         if (isMounted) {
-          const message = e instanceof Error ? e.message : "Failed to load rockets.";
-          setError(message);
+          setError(e instanceof Error ? e.message : "Failed to load rockets");
           setRocketCards(fallbackRockets);
         }
       } finally {
@@ -403,13 +391,23 @@ const s = StyleSheet.create({
   cardInfo: { alignItems: "center", marginBottom: 10 },
   cardTitle: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 14, marginBottom: 4 },
   cardDesc: { color: theme.colors.textMuted, fontSize: 11, textAlign: "center" },
-  stats: { gap: 8 },
-  statRow: { gap: 6 },
+  stats: { gap: 8, width: '100%' }, // 너비 확보
+  statRow: { gap: 6, width: '100%' }, // 너비 확보
   statHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  statLabel: { color: theme.colors.textAccent, fontSize: 10 },
+  statLabel: { color: theme.colors.textAccent, fontSize: 10, fontWeight: "600" },
   statValue: { color: theme.colors.textPrimary, fontSize: 10, fontWeight: "800" },
-  statTrack: { height: 6, borderRadius: 99, backgroundColor: theme.colors.track, overflow: "hidden" },
-  statFill: { height: 6, borderRadius: 99, backgroundColor: theme.colors.accent },
+  statTrack: { 
+    height: 6, 
+    width: '100%', // 이 부분이 빠져있으면 바가 그려지지 않습니다
+    borderRadius: 99, 
+    backgroundColor: theme.colors.track, 
+    overflow: "hidden" 
+  },
+  statFill: { 
+    height: "100%", // 부모 트랙의 높이를 꽉 채우도록 수정
+    borderRadius: 99, 
+    backgroundColor: theme.colors.accent 
+  },
   confirmWrap: { alignItems: "center", marginTop: 8 },
   confirmButton: {
     width: "70%",

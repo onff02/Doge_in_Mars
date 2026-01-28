@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export const API_BASE_URL = "http://52.78.92.200:3000";
+export const API_BASE_URL = "http://43.203.250.10:3000";
 export const AUTH_TOKEN_KEY = "auth_token";
 export const AUTH_USER_KEY = "auth_user";
 export const API_DIAGNOSTICS_KEY = "api_diagnostics";
@@ -49,11 +49,24 @@ export type Rocket = {
     ROE: number;
   };
   gameStats?: {
-    boost: { value: number };
-    armor: { value: number };
-    fuelEco: { value: number };
+    boost: { 
+      value: number;
+      rating: string;
+      description?: string;
+    };
+    armor: { 
+      value: number;
+      rating: string;
+      description?: string;
+    };
+    fuelEco: { 
+      value: number;
+      rating: string;
+      description?: string;
+    };
   };
 };
+
 
 export type ChartResponse = {
   symbol: string;
@@ -230,8 +243,8 @@ export async function markIntroComplete(): Promise<{ message: string }> {
   return apiRequest<{ message: string }>("/api/flight/intro-complete", { method: "POST", auth: true, body: {} });
 }
 
-export async function getRockets(): Promise<{ rockets: Rocket[] }> {
-  return apiRequest<{ rockets: Rocket[] }>("/api/rockets");
+export async function getRockets(): Promise<{ rockets: Rocket[]; statExplanation?: any }> {
+  return apiRequest<{ rockets: Rocket[]; statExplanation?: any }>("/api/rockets");
 }
 
 export async function getChart(symbol: string, round: number): Promise<ChartResponse> {

@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 // 만약 아래 문장에서 여전히 에러가 난다면 { AppNavigation } 처럼 중괄호를 붙여보세요.
 import AppNavigation from "./src/navigation"; 
+import { API_BASE_URL } from './src/api/client';
 
 export default function App() {
   
@@ -10,7 +11,7 @@ export default function App() {
     // [중요] 본인의 EC2 퍼블릭 IP 주소로 변경하세요.
     // 80번 포트로 아파치를 설치하셨다면 포트번호를 빼거나,
     // 백엔드가 3000번 등 다른 포트에서 돌고 있다면 해당 포트를 적어주세요.
-    const BACKEND_URL = 'http://52.78.92.200:3000'; 
+    const BACKEND_URL = API_BASE_URL; 
 
     console.log("🚀 백엔드 연결 시도 중...");
 

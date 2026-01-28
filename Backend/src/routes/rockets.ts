@@ -133,7 +133,7 @@ function getBoostRating(per: number): string {
   if (per <= 10) return '★★★★★'; // 매우 높은 가속력
   if (per <= 15) return '★★★★☆';
   if (per <= 20) return '★★★☆☆';
-  if (per <= 25) return '★★☆☆☆';
+  if (per <= 30) return '★★☆☆☆';
   return '★☆☆☆☆';
 }
 
@@ -159,37 +159,19 @@ interface RocketData {
   fuelEco: number;
 }
 
-function getRecommendedStyle(rocket: RocketData): {
-  style: string;
-  description: string;
-  marketCondition: string;
-} {
-  // 가장 뛰어난 스탯 찾기
-  const boostScore = 30 / rocket.boost; // PER은 낮을수록 좋음
-  const armorScore = 2 / rocket.armor;  // PBR은 낮을수록 좋음
-  const fuelScore = rocket.fuelEco / 20; // ROE는 높을수록 좋음
+function getRecommendedStyle(rocket: RocketData) {
+  // 스탯별 기여도 계산 (현실적인 주식 지표 기준)
+  const boostScore = 15 / rocket.boost;   // PER 15 기준
+  const armorScore = 1 / rocket.armor;    // PBR 1.0 기준
+  const fuelScore = rocket.fuelEco / 15;  // ROE 15% 기준
 
   const maxScore = Math.max(boostScore, armorScore, fuelScore);
 
   if (maxScore === boostScore) {
-    return {
-      style: '공격형',
-      description: '상승장에서 폭발적인 가속을 할 수 있습니다. 고출력 운용을 추천합니다.',
-      marketCondition: '상승장',
-    };
+    return { style: '공격형', description: '상승장에서 폭발적인 가속이 가능합니다.', marketCondition: '상승장' };
   }
-
   if (maxScore === armorScore) {
-    return {
-      style: '방어형',
-      description: '하락장에서도 안정적인 항해가 가능합니다. 변동성이 큰 항로에 적합합니다.',
-      marketCondition: '하락장/변동장',
-    };
+    return { style: '방어형', description: '하락장에서도 선체 손상이 거의 없습니다.', marketCondition: '변동장' };
   }
-
-  return {
-    style: '밸런스형',
-    description: '연료 효율이 뛰어나 장거리 항해에 유리합니다. 안정적인 운용을 추천합니다.',
-    marketCondition: '횡보장',
-  };
+  return { style: '밸런스형', description: '연료 효율이 좋아 안정적인 항해가 가능합니다.', marketCondition: '장거리' };
 }
