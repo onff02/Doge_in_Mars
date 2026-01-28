@@ -42,8 +42,167 @@
 ## 📐 3. 시스템 아키텍처 및 DB 스키마
 
 ### 시스템 아키텍처
-
+![System Architecture](Frontend/assets/week3.png)
 ### Database Schema
+![Database Schema](Frontend/assets/DB_schema.jpg)
+// Doge City in Mars DB Schema (DBML)
+// Generated from Prisma Schema
+
+Project DogeCityInMars {
+  database_type: 'PostgreSQL'
+  Note: '화성 갈끄니까 - 데이터 기반 항로 최적화 게임'
+}
+
+//--- Enums ---
+
+Enum TwistType {
+  NONE
+  POSITIVE
+  NEGATIVE
+}
+
+Enum GlobalEventType {
+  BEAR_TRAP
+  BULL_RUN
+  BUBBLE_BURST
+  NEUTRAL
+}
+
+Enum RoundPhase {
+  NEWS
+  PLAYING
+  RESULT
+}
+
+Enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+Enum InvestingStyle {
+  AGGRESSIVE_GROWTH
+  BALANCED_INVESTOR
+  CAUTIOUS_VALUE
+  RISK_TAKER
+  DEFENSIVE
+}
+
+Enum FinalEnding {
+  CRASH
+  MARS
+  INVASION
+}
+
+//--- Tables ---
+
+Table users {
+  id Int [pk, increment]
+  email String [unique]
+  password String
+  nickname String
+  introViewed Boolean [default: false]
+  createdAt DateTime [default: `now()`]
+  updatedAt DateTime
+}
+
+Table rockets {
+  id Int [pk, increment]
+  name String [unique]
+  description String
+  imageUrl String
+  category String
+  boost Float // PER 매핑
+  fuelEco Float // ROE 매핑
+  armor Float // PBR 매핑
+}
+
+Table game_events {
+  id Int [pk, increment]
+  round Int
+  isGlobal Boolean [default: true]
+  targetRocketId Int [note: 'Specific 이벤트일 경우']
+  
+  newsTitle String
+  newsDetail String
+  newsLog String
+  
+  thrustMod Float
+  isTwist Boolean [default: false]
+  twistType TwistType [default: 'NONE']
+  globalType GlobalEventType
+  
+  affectedStat String
+  statMultiplier Float
+}
+
+Table flight_sessions {
+  id Int [pk, increment]
+  userId Int
+  rocketId Int
+  
+  currentRound Int [default: 1]
+  roundPhase RoundPhase [default: 'NEWS']
+  currentFuel Float [default: 100.0]
+  currentHull Float [default: 100.0]
+  distance Float [default: 0.0]
+  
+  symbol String [default: 'AAPL']
+  
+  totalFuelUsed Float [default: 0.0]
+  highStabilityThrustCount Int [default: 0]
+  lowStabilityThrustCount Int [default: 0]
+  
+  status SessionStatus [default: 'IN_PROGRESS']
+  correctAnswers Int [default: 0]
+  
+  tier String
+  finalEnding FinalEnding
+  investingStyle InvestingStyle
+  advice String
+  
+  createdAt DateTime [default: `now()` ]
+  updatedAt DateTime
+}
+
+Table flight_logs {
+  id Int [pk, increment]
+  sessionId Int
+  round Int [default: 1]
+  
+  yValue Float
+  fuelInput Float
+  
+  fuelAfter Float
+  hullAfter Float
+  distanceAfter Float
+  
+  eventId Int
+  thrustMultiplier Float
+  wasRevealed Boolean [default: false]
+  eventDescription String
+  
+  isPositiveEvent Boolean
+  userChoseFuel Boolean
+  isCorrectChoice Boolean
+  
+  timestamp DateTime [default: `now()` ]
+}
+
+Table chart_data_cache {
+  id Int [pk, increment]
+  symbol String [unique]
+  data Json
+  fetchedAt DateTime [default: `now()` ]
+  expiresAt DateTime
+}
+
+//--- Relationships ---
+
+Ref: flight_sessions.userId > users.id [delete: cascade] // 유저별 항해 세션
+Ref: flight_sessions.rocketId > rockets.id // 세션에서 사용된 로켓
+Ref: game_events.targetRocketId > rockets.id // 특정 로켓 대상 이벤트
+Ref: flight_logs.sessionId > flight_sessions.id [delete: cascade] // 세션별 행동 로그
 
 ---
 
