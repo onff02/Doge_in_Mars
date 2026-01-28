@@ -11,7 +11,7 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
-import type { DecisionRecord } from "../api/client";
+import type { AnalysisResult, GameSession, MarketPhase, RoundLog } from "../api/client";
 import { analyzeDecisions, clearAuthSession, getChart, getFlightStatus, getRockets, startFlight, syncFlight, resetFlight } from "../api/client";
 
 type Telemetry = {
@@ -107,6 +107,134 @@ const PHASE_ONE_HINTS = [
   "가운데 레버를 올리거나 내려서 연료 소모량을 결정합니다. 오직 2가지 선택지만 있으며, 둘 중 하나가 정답입니다.",
   "도지가 무사히 화성에 도착할 수 있게 도와주세요!",
 ];
+
+const MARKET_PHASES: Record<number, MarketPhase> = {
+  1: "systemic_crash",
+  2: "high_volatility",
+  3: "expansion",
+  4: "regulatory_fog",
+  5: "bubble_collapse",
+  6: "final_approach",
+};
+
+const ROCKET_TYPES: Record<string, "growth" | "bluechip" | "defensive"> = {
+  NVDA: "growth",
+  AAPL: "bluechip",
+  KO: "defensive",
+};
+
+const ROUND_UPDATES: Record<number, Record<string, string[]>> = {
+  1: {
+    NVDA: [
+      "인근 고출력 함선들이 단기 가속에 성공하고 있습니다",
+      "선원들 사이에서 \"지금이 기회\"라는 낙관 무전이 증가 중입니다",
+      "일부 파일럿은 출력 증폭으로 항로를 돌파했습니다",
+      "중력 간섭이 고출력 엔진에 더 크게 작용하고 있습니다",
+      "장거리 예측 모듈의 오차가 임계치를 초과했습니다",
+    ],
+    AAPL: [
+      "대형 함선들이 안정 항로를 유지하며 전진 중입니다",
+      "\"이 정도 환경은 충분히 견딜 수 있다\"는 의견이 우세합니다",
+      "방어막이 유지되는 한 전진 시도도 가능해 보입니다",
+      "추진 여유가 빠르게 감소하고 있습니다",
+      "전진 대비 회복 비용이 점점 커지고 있습니다",
+    ],
+    KO: [
+      "주변 항로의 빠른 전진과 비교하면 정체가 두드러집니다",
+      "일부는 \"지금 올라타지 않으면 뒤처진다\"고 주장합니다",
+      "출력 변화에도 항로 이탈 가능성이 낮습니다",
+      "보급 모듈이 환경 변화에 거의 영향을 받지 않습니다",
+      "느리지만 안정적인 전진이 관측됩니다",
+    ],
+  },
+  2: {
+    NVDA: [
+      "짧은 가속으로 큰 이동에 성공한 사례가 반복 보고됩니다",
+      "\"타이밍만 맞으면 큰 보상\"이라는 무전이 확산 중입니다",
+      "주변 소형 함선들이 빠르게 치고 나가고 있습니다",
+      "출력 조작에 따른 결과 편차가 극단적으로 커졌습니다",
+      "실패 시 손실 회복이 어려운 구간입니다",
+    ],
+    AAPL: [
+      "항로 중심선이 자주 흔들리고 있습니다",
+      "외부 소음이 잦아 조작 판단이 어렵습니다",
+      "노이즈 이후 항로 복구 빈도가 높습니다",
+      "급격한 조작 없이도 전진이 누적됩니다",
+      "방어와 전진의 균형이 유지되고 있습니다",
+    ],
+    KO: [
+      "결정적인 가속 신호는 여전히 희미합니다",
+      "주변 항로와 비교하면 이동 속도가 느립니다",
+      "환경 변화에도 출력이 거의 변하지 않습니다",
+      "전진 결과의 분산이 작습니다",
+      "안정적 누적 이동이 관측됩니다",
+    ],
+  },
+  3: {
+    NVDA: [
+      "과열 경고가 점등되기 시작했습니다",
+      "일부 파일럿은 \"지금은 너무 빠르다\"고 우려합니다",
+      "출력 증폭이 리스크를 키운다는 분석도 존재합니다",
+      "고출력 상태에서 항로 저항이 급감합니다",
+      "출력 증가가 즉각적인 전진으로 연결됩니다",
+    ],
+    AAPL: [
+      "급격한 가속이 없어 체감 속도가 느립니다",
+      "\"지루한 항로\"라는 평가가 일부에서 나옵니다",
+      "지금은 다른 함선이 더 매력적으로 보입니다",
+      "출력 없이도 위치가 꾸준히 개선됩니다",
+      "방향성은 일관되게 유지됩니다",
+    ],
+    KO: [
+      "큰 이동이 없어 전진이 눈에 띄지 않습니다",
+      "일부는 \"이 환경에서 굳이?\"라고 의문을 제기합니다",
+      "기회 비용이 커 보입니다",
+      "항로 전체가 완만한 전진 흐름을 보입니다",
+      "손실 신호 없이 위치가 개선됩니다",
+    ],
+  },
+  4: {
+    NVDA: [
+      "통제 필드가 예고 없이 작동하는 구간이 있습니다",
+      "실패 시 손실이 크다는 경고가 반복됩니다",
+      "일부 파일럿은 접근 자체를 회피 중입니다",
+      "고출력 엔진이 통제 구간을 우회하는 반응을 보입니다",
+      "위험 구간 돌파 시 전진 폭이 큽니다",
+    ],
+    AAPL: [
+      "선체 안정성이 여전히 신뢰를 주고 있습니다",
+      "집단 이동 선단이 전진을 선택했습니다",
+      "\"지금은 유지보다 전진\"이라는 의견도 존재합니다",
+      "추가 점검 절차로 추진 효율이 감소했습니다",
+      "전진 대비 소모가 커지고 있습니다",
+    ],
+    KO: [
+      "방어적 항해가 심리적으로 답처럼 보입니다",
+      "\"천천히라도 가는 게 낫다\"는 무전이 반복됩니다",
+      "주변 함선들이 미세 전진을 이어가고 있습니다",
+      "확장 시 손실 누적 패턴이 감지됩니다",
+      "유지 전략이 상대적으로 유리해 보입니다",
+    ],
+  },
+  5: {
+    ALL: [
+      "인근 항로에서 예상 외의 반등 로그가 포착되었습니다",
+      "일부 함선이 고출력 돌파로 단기 성공을 보고했습니다",
+      "\"이 정도 공포는 과하다\"는 의견이 늘어나고 있습니다",
+      "출력 대비 손실 비율이 전반적으로 증가했습니다",
+      "실패 후 회복 시간이 길어지고 있습니다",
+    ],
+  },
+  6: {
+    ALL: [
+      "일부는 \"지금이 마지막 고점\"이라고 경고합니다",
+      "과도한 낙관이 위험하다는 분석도 병존합니다",
+      "작은 충격에도 조정이 올 수 있다는 의견이 있습니다",
+      "환경과 엔진 반응의 정렬도가 높아졌습니다",
+      "전진 결과가 예측과 점점 일치합니다",
+    ],
+  },
+};
 
 const MAX_ROUNDS = 6;
 
@@ -208,9 +336,9 @@ export default function CockpitScreen() {
   const [finalOutcomeKey, setFinalOutcomeKey] = useState<FinalOutcomeKey | null>(null);
   const [pendingRound, setPendingRound] = useState<number | null>(null);
   const [pendingFinalKey, setPendingFinalKey] = useState<FinalOutcomeKey | null>(null);
-  const [decisionLog, setDecisionLog] = useState<DecisionRecord[]>([]);
+  const [decisionLog, setDecisionLog] = useState<RoundLog[]>([]);
   const [analysisStatus, setAnalysisStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [analysisText, setAnalysisText] = useState("");
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState("");
   const chartCursor = useRef(1);
   const [phaseOneHintStep, setPhaseOneHintStep] = useState(0);
@@ -580,7 +708,7 @@ export default function CockpitScreen() {
   const runAnalysis = useCallback(async () => {
     if (analysisStatus === "loading") return;
     if (!decisionLog.length) {
-      setAnalysisText("분석할 기록이 없습니다.");
+      setAnalysisResult(null);
       setAnalysisStatus("done");
       return;
     }
@@ -588,14 +716,25 @@ export default function CockpitScreen() {
     try {
       setAnalysisStatus("loading");
       setAnalysisError("");
-      const result = await analyzeDecisions({ decisions: decisionLog });
-      setAnalysisText(result.analysis || "분석 결과가 없습니다.");
+      const rocketSymbol = (symbol || "NVDA").toUpperCase();
+      const session: GameSession = {
+        rocket: rocketSymbol,
+        rocketType: ROCKET_TYPES[rocketSymbol] ?? "growth",
+        rounds: decisionLog,
+        summary: {
+          accuracy: Number((correctCount / MAX_ROUNDS).toFixed(2)),
+          fuelLeft: telemetry.fuel ?? 0,
+          hullIntegrity: telemetry.hull ?? 0,
+        },
+      };
+      const result = await analyzeDecisions(session);
+      setAnalysisResult(result.analysis ?? null);
       setAnalysisStatus("done");
     } catch (e) {
       setAnalysisStatus("error");
       setAnalysisError(e instanceof Error ? e.message : "분석 요청에 실패했습니다.");
     }
-  }, [analysisStatus, decisionLog]);
+  }, [analysisStatus, correctCount, decisionLog, symbol, telemetry.fuel, telemetry.hull]);
   
   const handleConfirm = useCallback(async () => {
     setDecisionError("");
@@ -637,16 +776,18 @@ export default function CockpitScreen() {
       const correctDirection = ROUND_ANSWERS[round]?.[symbol] ?? ROUND_ANSWERS[round]?.default ?? "up";
       const isCorrect = chosenDirection === correctDirection;
       const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
-      setDecisionLog((prev) => [
-        ...prev,
-        {
+      setDecisionLog((prev) => {
+        const symbolKey = (symbol || "NVDA").toUpperCase();
+        const updatesForRound = ROUND_UPDATES[round]?.[symbolKey] ?? ROUND_UPDATES[round]?.ALL ?? [];
+        const roundLog: RoundLog = {
           round,
-          symbol: symbol || "NVDA",
-          choice: chosenDirection,
-          correct: isCorrect,
-          correctDirection,
-        },
-      ]);
+          marketPhase: MARKET_PHASES[round] ?? "expansion",
+          updates: updatesForRound.slice(0, 5),
+          userChoice: chosenDirection,
+          correctAnswer: correctDirection,
+        };
+        return [...prev, roundLog];
+      });
       setCorrectCount(nextCorrectCount);
       const outcome = getOutcomeKey(correctDirection, chosenDirection);
       setPendingRound(nextRound);
@@ -680,132 +821,16 @@ export default function CockpitScreen() {
     }
 
     const times = ["00:34", "00:31", "00:28", "00:25", "00:22"];
-    const makeItems = (messages: { tone: UpdateItem["tone"]; text: string }[]) =>
-      messages.map((message, index) => ({
-        time: times[index] ?? "00:20",
-        message: message.text,
-        tone: message.tone,
-      }));
-
     const roundKey = Math.min(Math.max(round, 1), MAX_ROUNDS);
     const symbolKey = (symbol || "NVDA").toUpperCase();
-
-    const updatesByRound: Record<number, Record<string, { tone: UpdateItem["tone"]; text: string }[]>> = {
-      1: {
-        NVDA: [
-          { tone: "warning", text: "인근 고출력 함선들이 단기 가속에 성공하고 있습니다" },
-          { tone: "warning", text: "선원들 사이에서 \"지금이 기회\"라는 낙관 무전이 증가 중입니다" },
-          { tone: "warning", text: "일부 파일럿은 출력 증폭으로 항로를 돌파했습니다" },
-          { tone: "success", text: "중력 간섭이 고출력 엔진에 더 크게 작용하고 있습니다" },
-          { tone: "success", text: "장거리 예측 모듈의 오차가 임계치를 초과했습니다" },
-        ],
-        AAPL: [
-          { tone: "warning", text: "대형 함선들이 안정 항로를 유지하며 전진 중입니다" },
-          { tone: "warning", text: "\"이 정도 환경은 충분히 견딜 수 있다\"는 의견이 우세합니다" },
-          { tone: "warning", text: "방어막이 유지되는 한 전진 시도도 가능해 보입니다" },
-          { tone: "success", text: "추진 여유가 빠르게 감소하고 있습니다" },
-          { tone: "success", text: "전진 대비 회복 비용이 점점 커지고 있습니다" },
-        ],
-        KO: [
-          { tone: "warning", text: "주변 항로의 빠른 전진과 비교하면 정체가 두드러집니다" },
-          { tone: "warning", text: "일부는 \"지금 올라타지 않으면 뒤처진다\"고 주장합니다" },
-          { tone: "success", text: "출력 변화에도 항로 이탈 가능성이 낮습니다" },
-          { tone: "success", text: "보급 모듈이 환경 변화에 거의 영향을 받지 않습니다" },
-          { tone: "success", text: "느리지만 안정적인 전진이 관측됩니다" },
-        ],
-      },
-      2: {
-        NVDA: [
-          { tone: "warning", text: "짧은 가속으로 큰 이동에 성공한 사례가 반복 보고됩니다" },
-          { tone: "warning", text: "\"타이밍만 맞으면 큰 보상\"이라는 무전이 확산 중입니다" },
-          { tone: "warning", text: "주변 소형 함선들이 빠르게 치고 나가고 있습니다" },
-          { tone: "success", text: "출력 조작에 따른 결과 편차가 극단적으로 커졌습니다" },
-          { tone: "success", text: "실패 시 손실 회복이 어려운 구간입니다" },
-        ],
-        AAPL: [
-          { tone: "warning", text: "항로 중심선이 자주 흔들리고 있습니다" },
-          { tone: "warning", text: "외부 소음이 잦아 조작 판단이 어렵습니다" },
-          { tone: "success", text: "노이즈 이후 항로 복구 빈도가 높습니다" },
-          { tone: "success", text: "급격한 조작 없이도 전진이 누적됩니다" },
-          { tone: "success", text: "방어와 전진의 균형이 유지되고 있습니다" },
-        ],
-        KO: [
-          { tone: "warning", text: "결정적인 가속 신호는 여전히 희미합니다" },
-          { tone: "warning", text: "주변 항로와 비교하면 이동 속도가 느립니다" },
-          { tone: "success", text: "환경 변화에도 출력이 거의 변하지 않습니다" },
-          { tone: "success", text: "전진 결과의 분산이 작습니다" },
-          { tone: "success", text: "안정적 누적 이동이 관측됩니다" },
-        ],
-      },
-      3: {
-        NVDA: [
-          { tone: "warning", text: "과열 경고가 점등되기 시작했습니다" },
-          { tone: "warning", text: "일부 파일럿은 \"지금은 너무 빠르다\"고 우려합니다" },
-          { tone: "warning", text: "출력 증폭이 리스크를 키운다는 분석도 존재합니다" },
-          { tone: "success", text: "고출력 상태에서 항로 저항이 급감합니다" },
-          { tone: "success", text: "출력 증가가 즉각적인 전진으로 연결됩니다" },
-        ],
-        AAPL: [
-          { tone: "warning", text: "급격한 가속이 없어 체감 속도가 느립니다" },
-          { tone: "warning", text: "\"지루한 항로\"라는 평가가 일부에서 나옵니다" },
-          { tone: "warning", text: "지금은 다른 함선이 더 매력적으로 보입니다" },
-          { tone: "success", text: "출력 없이도 위치가 꾸준히 개선됩니다" },
-          { tone: "success", text: "방향성은 일관되게 유지됩니다" },
-        ],
-        KO: [
-          { tone: "warning", text: "큰 이동이 없어 전진이 눈에 띄지 않습니다" },
-          { tone: "warning", text: "일부는 \"이 환경에서 굳이?\"라고 의문을 제기합니다" },
-          { tone: "warning", text: "기회 비용이 커 보입니다" },
-          { tone: "success", text: "항로 전체가 완만한 전진 흐름을 보입니다" },
-          { tone: "success", text: "손실 신호 없이 위치가 개선됩니다" },
-        ],
-      },
-      4: {
-        NVDA: [
-          { tone: "warning", text: "통제 필드가 예고 없이 작동하는 구간이 있습니다" },
-          { tone: "warning", text: "실패 시 손실이 크다는 경고가 반복됩니다" },
-          { tone: "warning", text: "일부 파일럿은 접근 자체를 회피 중입니다" },
-          { tone: "success", text: "고출력 엔진이 통제 구간을 우회하는 반응을 보입니다" },
-          { tone: "success", text: "위험 구간 돌파 시 전진 폭이 큽니다" },
-        ],
-        AAPL: [
-          { tone: "warning", text: "선체 안정성이 여전히 신뢰를 주고 있습니다" },
-          { tone: "warning", text: "집단 이동 선단이 전진을 선택했습니다" },
-          { tone: "warning", text: "\"지금은 유지보다 전진\"이라는 의견도 존재합니다" },
-          { tone: "success", text: "추가 점검 절차로 추진 효율이 감소했습니다" },
-          { tone: "success", text: "전진 대비 소모가 커지고 있습니다" },
-        ],
-        KO: [
-          { tone: "warning", text: "방어적 항해가 심리적으로 답처럼 보입니다" },
-          { tone: "warning", text: "\"천천히라도 가는 게 낫다\"는 무전이 반복됩니다" },
-          { tone: "warning", text: "주변 함선들이 미세 전진을 이어가고 있습니다" },
-          { tone: "success", text: "확장 시 손실 누적 패턴이 감지됩니다" },
-          { tone: "success", text: "유지 전략이 상대적으로 유리해 보입니다" },
-        ],
-      },
-      5: {
-        ALL: [
-          { tone: "warning", text: "인근 항로에서 예상 외의 반등 로그가 포착되었습니다" },
-          { tone: "warning", text: "일부 함선이 고출력 돌파로 단기 성공을 보고했습니다" },
-          { tone: "warning", text: "\"이 정도 공포는 과하다\"는 의견이 늘어나고 있습니다" },
-          { tone: "success", text: "출력 대비 손실 비율이 전반적으로 증가했습니다" },
-          { tone: "success", text: "실패 후 회복 시간이 길어지고 있습니다" },
-        ],
-      },
-      6: {
-        ALL: [
-          { tone: "warning", text: "일부는 \"지금이 마지막 고점\"이라고 경고합니다" },
-          { tone: "warning", text: "과도한 낙관이 위험하다는 분석도 병존합니다" },
-          { tone: "warning", text: "작은 충격에도 조정이 올 수 있다는 의견이 있습니다" },
-          { tone: "success", text: "환경과 엔진 반응의 정렬도가 높아졌습니다" },
-          { tone: "success", text: "전진 결과가 예측과 점점 일치합니다" },
-        ],
-      },
-    };
-
-    const roundUpdates = updatesByRound[roundKey] ?? {};
-    const selectedUpdates = roundUpdates[symbolKey] ?? roundUpdates.ALL ?? [];
-    return items.concat(makeItems(selectedUpdates));
+    const selectedUpdates = ROUND_UPDATES[roundKey]?.[symbolKey] ?? ROUND_UPDATES[roundKey]?.ALL ?? [];
+    const toneOrder: UpdateItem["tone"][] = ["warning", "warning", "warning", "success", "success"];
+    const mapped = selectedUpdates.map((text, index) => ({
+      time: times[index] ?? "00:20",
+      message: text,
+      tone: toneOrder[index] ?? "warning",
+    }));
+    return items.concat(mapped);
   }, [error, round, symbol]);
 
   const panelUpdates = updates.slice(0, 5);
@@ -909,7 +934,9 @@ export default function CockpitScreen() {
                   <Text style={s.analysisResult}>
                     {analysisStatus === "error"
                       ? analysisError || "분석 요청에 실패했습니다."
-                      : analysisText || "분석 결과가 없습니다."}
+                      : analysisResult
+                        ? JSON.stringify(analysisResult, null, 2)
+                        : "분석 결과가 없습니다."}
                   </Text>
                 )}
               </View>

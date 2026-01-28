@@ -137,6 +137,47 @@ export type FlightSyncResponse = {
   gameOverReason: string;
 };
 
+export type MarketPhase =
+  | "systemic_crash"
+  | "high_volatility"
+  | "expansion"
+  | "regulatory_fog"
+  | "bubble_collapse"
+  | "final_approach";
+
+export type RoundLog = {
+  round: number;
+  marketPhase: MarketPhase;
+  updates: string[];
+  userChoice: "up" | "down";
+  correctAnswer: "up" | "down";
+};
+
+export type GameSession = {
+  rocket: string;
+  rocketType: "growth" | "bluechip" | "defensive";
+  rounds: RoundLog[];
+  summary: {
+    accuracy: number;
+    fuelLeft: number;
+    hullIntegrity: number;
+  };
+};
+
+export type AnalysisResult = {
+  archetype: string;
+  oneLineSummary: string;
+  behaviorTraits: string[];
+  strengths: string[];
+  weaknesses: string[];
+  learningInsight: string;
+  grade: "S" | "A" | "B" | "C" | "D" | "F";
+};
+
+export type DecisionAnalysisResponse = {
+  analysis: AnalysisResult;
+};
+
 export type DecisionRecord = {
   round: number;
   symbol: string;
@@ -280,6 +321,6 @@ export async function syncFlight(params: {
   return apiRequest<FlightSyncResponse>("/api/flight/sync", { method: "POST", body: params, auth: true });
 }
 
-export async function analyzeDecisions(params: { decisions: DecisionRecord[] }): Promise<DecisionAnalysisResponse> {
-  return apiRequest<DecisionAnalysisResponse>("/api/analysis/decision", { method: "POST", body: params, auth: true });
+export async function analyzeDecisions(session: GameSession): Promise<DecisionAnalysisResponse> {
+  return apiRequest<DecisionAnalysisResponse>("/api/analysis/decision", { method: "POST", body: session, auth: true });
 }
