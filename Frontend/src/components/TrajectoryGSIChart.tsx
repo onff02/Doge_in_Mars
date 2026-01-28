@@ -22,8 +22,8 @@ export default function TrajectoryGSIChart({ data, width, height }: TrajectoryGS
     const max = Math.max(...data);
     const range = Math.max(max - min, 0.001); // 0으로 나누기 방지
 
-    // 차트 내부 여백 설정 (상하 20px씩)
-    const paddingY = 20;
+    // 차트 내부 여백 설정 (작은 화면에서 잘림 방지)
+    const paddingY = Math.min(18, Math.max(6, Math.round(height * 0.14)));
     const drawHeight = height - paddingY * 2;
 
     data.forEach((v, i) => {

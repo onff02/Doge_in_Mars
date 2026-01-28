@@ -10,6 +10,7 @@ import { authRoutes } from './routes/auth.js';
 import { flightRoutes } from './routes/flight.js';
 import { rocketRoutes } from './routes/rockets.js';
 import { chartRoutes } from './routes/charts.js';
+import { analysisRoutes } from './routes/analysis.js';
 import prisma from './lib/prisma.js';
 
 // Fastify 인스턴스 생성
@@ -96,6 +97,7 @@ async function buildApp() {
         flight: '/api/flight',
         rockets: '/api/rockets',
         charts: '/api/charts',
+        analysis: '/api/analysis',
       },
       docs: '/docs',
     };
@@ -123,6 +125,7 @@ async function buildApp() {
   await fastify.register(flightRoutes, { prefix: '/api/flight' });
   await fastify.register(rocketRoutes, { prefix: '/api/rockets' });
   await fastify.register(chartRoutes, { prefix: '/api/charts' });
+  await fastify.register(analysisRoutes, { prefix: '/api/analysis' });
 
   // 에러 핸들러
   fastify.setErrorHandler((error, request, reply) => {
