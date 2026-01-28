@@ -47,7 +47,7 @@
 ![Database Schema](Frontend/assets/DB_schema.jpg)
 
 ```dbml
-// Doge City in Mars DB Schema (DBML)
+// Doge in Mars DB Schema (DBML)
 // Generated from Prisma Schema
 
 Project DogeCityInMars {
