@@ -25,6 +25,15 @@ type LeverChoice = "up" | "down";
 type OutcomeKey = "upCorrect" | "upWrong" | "downCorrect" | "downWrong";
 type FinalOutcomeKey = "fail" | "success1" | "success2";
 
+const BACKGROUNDS: Record<number, any> = {
+  0: require("../../assets/correction0.png"),
+  1: require("../../assets/correction1.png"),
+  2: require("../../assets/correction2.png"),
+  3: require("../../assets/correction3.png"),
+  4: require("../../assets/cockpit.png"), // [요청사항] 현재 배경을 4개일 때 사용
+  5: require("../../assets/correction5.png"),
+};
+
 const OUTCOME_VIDEOS = {
   upCorrect: require("../../assets/videos/upCorrect.mp4"),
   upWrong: require("../../assets/videos/upWrong.mp4"),
@@ -98,7 +107,6 @@ const PHASE_ONE_HINTS = [
   "도지가 무사히 화성에 도착할 수 있게 도와주세요!",
 ];
 
-const BG_IMAGE = require("../../assets/cockpit.png");
 const MAX_ROUNDS = 6;
 
 function generateGsiData(points: number) {
@@ -291,6 +299,11 @@ export default function CockpitScreen() {
   const finalScoreLabel = `${correctCount} / ${MAX_ROUNDS}`;
   const finalMessage = finalOutcomeKey ? FINAL_MESSAGES[finalOutcomeKey] : "";
   const confirmDisabled = isConfirming || leverPosition === "middle";
+
+  const currentBg = useMemo(() => {
+    const index = Math.min(Math.max(correctCount, 0), 6);
+    return BACKGROUNDS[index] || BACKGROUNDS[4];
+  }, [correctCount]);
 
   const updateLeverPosition = useCallback(
     (next: "up" | "middle" | "down") => {
@@ -757,9 +770,10 @@ export default function CockpitScreen() {
   }, [error, round, symbol]);
 
   const panelUpdates = updates.slice(0, 5);
+  // [수정] windowLayer 구성 (배경 이미지 동적 적용)
   const windowLayer = (
     <View style={s.window} pointerEvents="none">
-      <ImageBackground source={BG_IMAGE} style={StyleSheet.absoluteFillObject} resizeMode="stretch">
+      <ImageBackground source={currentBg} style={StyleSheet.absoluteFillObject} resizeMode="stretch">
         <View style={s.windowOverlay} />
       </ImageBackground>
       <View style={s.glassSheen} />
@@ -767,9 +781,11 @@ export default function CockpitScreen() {
       <View style={s.windowRim} />
     </View>
   );
+
+  // [수정] cockpitWindowLayer 구성 (배경 이미지 동적 적용)
   const cockpitWindowLayer = (
     <View style={s.window} pointerEvents="none">
-      <ImageBackground source={BG_IMAGE} style={StyleSheet.absoluteFillObject} resizeMode="stretch" />
+      <ImageBackground source={currentBg} style={StyleSheet.absoluteFillObject} resizeMode="stretch" />
     </View>
   );
 
