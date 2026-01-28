@@ -11,7 +11,8 @@ import TrajectoryGSIChart from "../components/TrajectoryGSIChart";
 import ChartScreen from "./ChartScreen";
 import InfoScreen, { UpdateItem } from "./InfoScreen";
 import { theme } from "../theme";
-import { clearAuthSession, getChart, getFlightStatus, getRockets, startFlight, syncFlight, resetFlight } from "../api/client";
+import type { DecisionRecord } from "../api/client";
+import { analyzeDecisions, clearAuthSession, getChart, getFlightStatus, getRockets, startFlight, syncFlight, resetFlight } from "../api/client";
 
 type Telemetry = {
   fuel?: number;
@@ -199,6 +200,10 @@ export default function CockpitScreen() {
   const [finalOutcomeKey, setFinalOutcomeKey] = useState<FinalOutcomeKey | null>(null);
   const [pendingRound, setPendingRound] = useState<number | null>(null);
   const [pendingFinalKey, setPendingFinalKey] = useState<FinalOutcomeKey | null>(null);
+  const [decisionLog, setDecisionLog] = useState<DecisionRecord[]>([]);
+  const [analysisStatus, setAnalysisStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [analysisText, setAnalysisText] = useState("");
+  const [analysisError, setAnalysisError] = useState("");
   const chartCursor = useRef(1);
   const [phaseOneHintStep, setPhaseOneHintStep] = useState(0);
   const blackHolePulse = useRef(new Animated.Value(0)).current;
@@ -246,8 +251,12 @@ export default function CockpitScreen() {
   const leverLeft = Math.round((frame.width - leverWidth) / 2);
   const sidePanelWidth = chartPanelWidth;
   const updatesPanelWidth = screenInnerWidth;
-  const chartWidth = Math.max(0, sidePanelWidth - 8);
-  const chartHeight = Math.max(60, Math.min(screenInnerHeight - 52, screenInnerHeight * 0.48));
+  const sidePanelPadding = 6;
+  const chartWindowPadding = 0;
+  const chartReservedHeight = 18;
+  const chartMaxHeight = Math.max(0, screenInnerHeight - sidePanelPadding * 2 - chartReservedHeight);
+  const chartWidth = Math.max(0, sidePanelWidth - sidePanelPadding * 2 - chartWindowPadding * 2);
+  const chartHeight = Math.max(0, chartMaxHeight);
   const trackHeight = Math.max(110, Math.min(centerHeight * 0.58, 140));
   const handleHeight = 40;
   const leverTopMargin = 10;
@@ -554,6 +563,26 @@ export default function CockpitScreen() {
   const handleRestart = useCallback(() => {
     nav.reset({ index: 0, routes: [{ name: "RocketSelect" }] });
   }, [nav]);
+
+  const runAnalysis = useCallback(async () => {
+    if (analysisStatus === "loading") return;
+    if (!decisionLog.length) {
+      setAnalysisText("분석할 기록이 없습니다.");
+      setAnalysisStatus("done");
+      return;
+    }
+
+    try {
+      setAnalysisStatus("loading");
+      setAnalysisError("");
+      const result = await analyzeDecisions({ decisions: decisionLog });
+      setAnalysisText(result.analysis || "분석 결과가 없습니다.");
+      setAnalysisStatus("done");
+    } catch (e) {
+      setAnalysisStatus("error");
+      setAnalysisError(e instanceof Error ? e.message : "분석 요청에 실패했습니다.");
+    }
+  }, [analysisStatus, decisionLog]);
   
   const handleConfirm = useCallback(async () => {
     setDecisionError("");
@@ -595,6 +624,16 @@ export default function CockpitScreen() {
       const correctDirection = ROUND_ANSWERS[round]?.[symbol] ?? ROUND_ANSWERS[round]?.default ?? "up";
       const isCorrect = chosenDirection === correctDirection;
       const nextCorrectCount = correctCount + (isCorrect ? 1 : 0);
+      setDecisionLog((prev) => [
+        ...prev,
+        {
+          round,
+          symbol: symbol || "NVDA",
+          choice: chosenDirection,
+          correct: isCorrect,
+          correctDirection,
+        },
+      ]);
       setCorrectCount(nextCorrectCount);
       const outcome = getOutcomeKey(correctDirection, chosenDirection);
       setPendingRound(nextRound);
@@ -834,6 +873,30 @@ export default function CockpitScreen() {
               <Text style={s.finalTitle}>RESULT</Text>
               <Text style={s.finalScore}>{finalScoreLabel}</Text>
               <Text style={s.finalMessage}>{finalMessage}</Text>
+              <View style={s.analysisBlock}>
+                <Pressable
+                  style={({ pressed }) => [
+                    s.analysisButton,
+                    analysisStatus === "loading" && s.analysisButtonDisabled,
+                    pressed && analysisStatus !== "loading" && s.analysisButtonPressed,
+                  ]}
+                  onPress={runAnalysis}
+                  disabled={analysisStatus === "loading"}
+                >
+                  <Text style={s.analysisButtonText}>
+                    {analysisStatus === "loading" ? "분석 중..." : analysisStatus === "done" ? "다시 분석" : "AI 분석"}
+                  </Text>
+                </Pressable>
+                {analysisStatus === "idle" ? (
+                  <Text style={s.analysisHint}>AI 분석 버튼을 눌러 성향을 확인하세요.</Text>
+                ) : (
+                  <Text style={s.analysisResult}>
+                    {analysisStatus === "error"
+                      ? analysisError || "분석 요청에 실패했습니다."
+                      : analysisText || "분석 결과가 없습니다."}
+                  </Text>
+                )}
+              </View>
               <View style={s.finalActions}>
                 <Pressable style={({ pressed }) => [s.finalActionButton, pressed && s.finalActionPressed]} onPress={handleRestart}>
                   <Text style={s.finalActionText}>RESTART</Text>
@@ -995,12 +1058,6 @@ export default function CockpitScreen() {
               <View style={s.chartWindow}>
                 <TrajectoryGSIChart data={gsiData} width={chartWidth} height={chartHeight} />
               </View>
-              <View style={s.panelMeta}>
-                <View style={[s.statusDot, { backgroundColor: signalColor }]} />
-                <Text style={s.panelMetaText}>{signalText}</Text>
-              </View>
-              {error ? <Text style={s.errorText}>{error}</Text> : null}
-              <Text style={s.panelHint}>Tap to expand</Text>
             </Pressable>
 
             <View style={[s.leverPanel, { width: leverWidth, height: centerHeight, left: leverLeft, top: leverTop }]}>
@@ -1419,6 +1476,30 @@ const s = StyleSheet.create({
   finalTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 16, letterSpacing: 1, marginBottom: 8 },
   finalScore: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 26, letterSpacing: 1, marginBottom: 10 },
   finalMessage: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center" },
+  analysisBlock: {
+    width: "100%",
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorderSoft,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+  },
+  analysisButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.accentBorderStrong,
+    backgroundColor: "rgba(234,88,12,0.85)",
+  },
+  analysisButtonPressed: { transform: [{ scale: 0.97 }] },
+  analysisButtonDisabled: { opacity: 0.7 },
+  analysisButtonText: { color: theme.colors.textPrimary, fontWeight: "900", fontSize: 12, letterSpacing: 0.8 },
+  analysisHint: { color: theme.colors.textMuted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 8 },
+  analysisResult: { color: theme.colors.textPrimary, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 8 },
   finalActions: { flexDirection: "row", gap: 12, marginTop: 16 },
   finalActionButton: {
     paddingVertical: 10,
@@ -1466,7 +1547,7 @@ const s = StyleSheet.create({
   sidePanelRightTight: { paddingRight: 0 },
   panelTitle: { color: theme.colors.accent, fontWeight: "800", fontSize: 10, letterSpacing: 1, marginBottom: 2 },
   panelTitleTight: { marginBottom: 2 },
-  chartWindow: { borderRadius: theme.radius.md, padding: 3, backgroundColor: "rgba(0,0,0,0.35)" },
+  chartWindow: { borderRadius: theme.radius.md, padding: 0, backgroundColor: "rgba(0,0,0,0.35)" },
   panelMeta: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 3 },
   statusDot: { width: 3, height: 3, borderRadius: 999 },
   panelMetaText: { color: theme.colors.textMuted, fontSize: 8 },

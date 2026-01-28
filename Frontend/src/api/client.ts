@@ -137,6 +137,18 @@ export type FlightSyncResponse = {
   gameOverReason: string;
 };
 
+export type DecisionRecord = {
+  round: number;
+  symbol: string;
+  choice: "up" | "down";
+  correct: boolean;
+  correctDirection?: "up" | "down";
+};
+
+export type DecisionAnalysisResponse = {
+  analysis: string;
+};
+
 export async function getAuthToken(): Promise<string | null> {
   return AsyncStorage.getItem(AUTH_TOKEN_KEY);
 }
@@ -266,4 +278,8 @@ export async function syncFlight(params: {
   previousYValue?: number;
 }): Promise<FlightSyncResponse> {
   return apiRequest<FlightSyncResponse>("/api/flight/sync", { method: "POST", body: params, auth: true });
+}
+
+export async function analyzeDecisions(params: { decisions: DecisionRecord[] }): Promise<DecisionAnalysisResponse> {
+  return apiRequest<DecisionAnalysisResponse>("/api/analysis/decision", { method: "POST", body: params, auth: true });
 }
